@@ -1,0 +1,29 @@
+name: Ejecucion Diaria Bot Quant
+
+on:
+  schedule:
+    # Se ejecuta a las 14:30 UTC (aprox. 9:30 AM en NY) de lunes a viernes
+    - cron: '30 14 * * 1-5'
+  workflow_dispatch: # Permite ejecutarlo manualmente para probar
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout de codigo
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Instalar librerias
+        run: |
+          pip install -r requirements.txt
+
+      - name: Ejecutar Bot
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot_quant.py
