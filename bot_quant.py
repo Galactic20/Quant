@@ -86,7 +86,8 @@ def enviar_telegram(mensaje):
     requests.post(url, json=payload)
 
 def ejecutar_bot():
-    tickers = ['QQQ', 'NVDA', 'AAPL', 'MSFT', 'BTC-USD', 'ETH-USD', 'TSLA', 'AMD', 'VTI', 'ON', 'TSM', 'META', 'IEF', 'GUSH', 'GOOG', 'SHOP', 'ASML', 'GLD']
+    tickers = ['QQQ', 'NVDA', 'AAPL', 'MSFT', 'BTC-USD', 'ETH-USD', 'TSLA', 'AMD', 'VTI', 'ON', 'TSM', 'META', 'IEF', 'GUSH', 'GOOG', 'SHOP', 'ASML', 'GLD', 'NVDA', 'BA', 'CVX', 'PANW', 'AMZN', 'OXY', 'JNJ', 'AMD', 
+               'CRM', 'INTC', 'JPM', 'LUV', 'MELI', 'BABA', 'MA', 'NET', 'AVGO', 'NFLX', 'LRCX', 'VTI']
     print(f"🚀 Iniciando escaneo...")
 
     for t in tickers:
