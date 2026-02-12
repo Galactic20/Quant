@@ -6,125 +6,100 @@ import os
 import warnings
 from datetime import datetime
 
-# Limpieza de warnings para logs legibles en GitHub
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-# --- CONFIGURACIÓN QUANT PROFESIONAL ---
-# Se obtienen de GitHub Settings > Secrets > Actions
-TOKEN = os.getenv("TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+# --- CONFIGURACIÓN DE NOTIFICACIONES ---
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-# Gestión de Riesgo Basada en Capital (Regla del 1%)
-CAPITAL_TOTAL = 2000
-PORCENTAJE_RIESGO = 0.01 
-RIESGO_USD = CAPITAL_TOTAL * PORCENTAJE_RIESGO # Resultado: $20 USD
+# --- CONFIGURACIÓN DE ESTRATEGIA ---
+CAPITAL_INICIAL = 2000
+RIESGO_USD = CAPITAL_INICIAL * 0.01 # $20 USD por operación
 
-def calcular_estrategia_quant(ticker, riesgo_permitido):
+# --- DICCIONARIO COMPLETO (Asegúrate de incluir tus 35 activos) ---
+SECTORES = {
+    'QQQ': 'Índices (ETF)', 'VTI': 'Índices (ETF)', 'IEF': 'Bonos', 'GLD': 'Oro/Refugio',
+    'BTC-USD': 'Crypto', 'ETH-USD': 'Crypto',
+    'NVDA': 'Semiconductores', 'AMD': 'Semiconductores', 'TSM': 'Semiconductores',
+    'AVGO': 'Semiconductores', 'ASML': 'Semiconductores', 'ON': 'Semiconductores',
+    'INTC': 'Semiconductores', 'LRCX': 'Semiconductores',
+    'AAPL': 'Big Tech', 'MSFT': 'Big Tech', 'META': 'Big Tech', 'GOOG': 'Big Tech',
+    'AMZN': 'Big Tech', 'NFLX': 'Big Tech', 'CRM': 'Software/SaaS',
+    'TSLA': 'Automotriz/Tech', 'BA': 'Aeroespacial', 'LUV': 'Aerolíneas',
+    'JPM': 'Finanzas', 'MA': 'Finanzas', 'MELI': 'E-commerce', 'SHOP': 'E-commerce', 'Etsy': 'E-commerce',
+    'NET': 'Ciberseguridad', 'PANW': 'Ciberseguridad', 'BABA': 'China Tech',
+    'CVX': 'Energía', 'OXY': 'Energía', 'GUSH': 'Energía (Apal)',  'OXY': 'Energía',
+    'ENPH': 'Energía', 'JNJ': 'Salud', 'GIL': 'Consumo cíclico', 'ABEV': 'Consumo defensivo'
+    # Agrega aquí el resto de tus tickers...
+}
+
+# --- TU CARTERA REAL ---
+MIS_POSICIONES = {"AAPL": 2, "BTC-USD": 0.0005, "NVDA": 1}
+
+def enviar_telegram(mensaje):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": mensaje, "parse_mode": "Markdown"}
     try:
-        # Descarga de datos (3 años para SMA 200 estable)
-        df = yf.download(ticker, period="3y", auto_adjust=True, progress=False)
+        requests.post(url, json=payload, timeout=10)
+    except Exception as e:
+        print(f"Error enviando Telegram: {e}")
+
+def analizar_mercado_sano():
+    try:
+        spy = yf.download("SPY", period="1y", progress=False)
+        spy.columns = [c[0] if isinstance(c, tuple) else c for c in spy.columns]
+        return bool(spy['Close'].iloc[-1] > spy['Close'].rolling(200).mean().iloc[-1])
+    except: return True
+
+def motor_quant_cloud(ticker, mercado_sano):
+    try:
+        df = yf.download(ticker, period="3y", progress=False)
         if df.empty or len(df) < 200: return None
+        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
 
-        # 1. Media Móvil Simple (Tendencia)
+        # Indicadores
         df['SMA_200'] = df['Close'].rolling(window=200).mean()
-
-        # 2. RSI Wilder (Momentum/Sobreventa)
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
         loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
         df['RSI'] = 100 - (100 / (1 + (gain / loss)))
-
-        # 3. ATR (Volatilidad para Stop Loss)
-        hl = df['High'] - df['Low']
-        h_pc = abs(df['High'] - df['Close'].shift())
-        l_pc = abs(df['Low'] - df['Close'].shift())
-        df['TR'] = pd.concat([hl, h_pc, l_pc], axis=1).max(axis=1)
+        df['TR'] = pd.concat([(df['High']-df['Low']), abs(df['High']-df['Close'].shift()), abs(df['Low']-df['Close'].shift())], axis=1).max(axis=1)
         df['ATR'] = df['TR'].rolling(window=14).mean()
 
-        # Valores del cierre más reciente
         last = df.iloc[-1]
-        precio = float(last['Close'].item())
-        rsi = float(last['RSI'].item())
-        sma = float(last['SMA_200'].item())
-        atr = float(last['ATR'].item())
-        max_14 = float(df['High'].rolling(window=14).max().iloc[-1])
-
-        # --- LÓGICA DE STOP LOSS DINÁMICO ---
-        # Si el precio cae muy rápido, el Chandelier Exit (max - 3*ATR) falla.
-        # En ese caso, usamos un SL adaptativo de 1.5*ATR desde el precio actual.
-        stop_teorico = max_14 - (atr * 3)
-        if stop_teorico >= precio:
-            stop_loss = precio - (atr * 1.5)
-            tipo_sl = "Adaptativo (Volatilidad Alta)"
-        else:
-            stop_loss = stop_teorico
-            tipo_sl = "Estándar (Chandelier)"
-
-        # --- CÁLCULO DE TAMAÑO DE POSICIÓN ---
-        distancia_riesgo = precio - stop_loss
-        take_profit = precio + (distancia_riesgo * 2) # Ratio 1:2
+        p, rsi, sma, atr = float(last['Close']), float(last['RSI']), float(last['SMA_200']), float(last['ATR'])
         
-        # Cantidad necesaria para perder exactamente el riesgo_permitido ($20)
-        unidades = riesgo_permitido / distancia_riesgo if distancia_riesgo > 0 else 0
-        inversion_total = unidades * precio
-
-        # --- FILTROS DE SEÑAL ---
-        senal = "ESPERAR"
-        if precio > sma: # Filtro de tendencia alcista
-            if rsi < 40: # Filtro de sobreventa
-                senal = "🟢 COMPRA"
-            elif rsi > 70:
-                senal = "🔴 VENTA"
-        else:
-            senal = "⚪ TEND. BAJISTA"
-
-        return {
-            "Ticker": ticker.replace("-USD", ""),
-            "Precio": round(precio, 2),
-            "RSI": round(rsi, 1),
-            "SL": round(stop_loss, 2),
-            "TP": round(take_profit, 2),
-            "Cant": round(unidades, 2),
-            "Inversion": round(inversion_total, 2),
-            "SEÑAL": senal
-        }
-    except Exception as e:
-        print(f"Error en {ticker}: {e}")
+        # SL/TP Dinámicos
+        dist_sl = atr * 2.5
+        sl = p - dist_sl
+        tp = p + (atr * 6)
+        
+        # Señal
+        senal = "🟢 COMPRA" if p > sma and rsi < 40 else "🔴 VENTA" if rsi > 70 else "⚪ BAJISTA" if p < sma else "👍 ALCISTA"
+        tengo = MIS_POSICIONES.get(ticker, 0)
+        
+        # Filtro de Alertas Críticas
+        if tengo > 0:
+            if senal == "⚪ BAJISTA": return f"🚨 *VENTA URGENTE*: {ticker}\nPrecio: {round(p,2)}\n*Motivo*: Tendencia de largo plazo rota."
+            if senal == "🔴 VENTA": return f"💰 *TOMAR GANANCIAS*: {ticker}\nPrecio: {round(p,2)}\n*Motivo*: Sobrecompra (RSI: {round(rsi,1)})"
+        elif senal == "🟢 COMPRA" and mercado_sano:
+            cant = round(RIESGO_USD / dist_sl, 2)
+            return f"🛒 *NUEVA COMPRA*: {ticker}\nPrecio: {round(p,2)}\nCant. Sugerida: {cant}\nSL: {round(sl,2)} | TP: {round(tp,2)}"
+        
         return None
+    except: return None
 
-def enviar_telegram(mensaje):
-    if not TOKEN or not CHAT_ID: return
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": mensaje, "parse_mode": "Markdown"}
-    requests.post(url, json=payload)
+# --- EJECUCIÓN PRINCIPAL ---
+mercado_ok = analizar_mercado_sano()
+alertas = []
 
-def ejecutar_escaneo():
-    tickers = ['QQQ', 'NVDA', 'AAPL', 'MSFT', 'BTC-USD', 'ETH-USD', 'TSLA', 'AMD', 'VTI', 'ON', 'TSM', 'META', 'IEF', 'GUSH', 'GOOG', 'SHOP', 'ASML', 'GLD', 'BA', 'CVX', 'PANW', 'AMZN', 'OXY', 'JNJ', 'CRM', 'INTC', 'JPM', 'LUV', 'MELI', 'BABA', 'MA', 'NET', 'AVGO', 'NFLX', 'LRCX']
-    
-    print(f"🚀 Escaneo iniciado: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    print(f"💰 Riesgo por operación: ${RIESGO_USD} (1% de {CAPITAL_TOTAL})")
-    
-    resultados_lista = []
+for t in SECTORES.keys():
+    res = motor_quant_cloud(t, mercado_ok)
+    if res: alertas.append(res)
 
-    for t in tickers:
-        data = calcular_estrategia_quant(t, RIESGO_USD)
-        if data:
-            resultados_lista.append(data)
-            if data['SEÑAL'] == "🟢 COMPRA":
-                msg = (f"🎯 *SEÑAL DE COMPRA QUANT*\n\n"
-                       f"📈 *Activo:* {data['Ticker']}\n"
-                       f"💰 *Entrada:* ${data['Precio']}\n"
-                       f"📊 *RSI:* {data['RSI']}\n\n"
-                       f"🛡️ *Stop Loss:* {data['SL']}\n"
-                       f"🚀 *Take Profit:* {data['TP']}\n"
-                       f"⚖️ *Cantidad:* {data['Cant']} acciones\n"
-                       f"💸 *Inversión:* ${data['Inversion']}\n\n"
-                       f"_Pérdida máxima controlada: ${RIESGO_USD}_")
-                enviar_telegram(msg)
-    
-    # Mostrar tabla resumen en el log de GitHub
-    df_resumen = pd.DataFrame(resultados_lista)
-    print("\n" + df_resumen.to_string(index=False))
-
-if __name__ == "__main__":
-    ejecutar_escaneo()
+if alertas:
+    mensaje_final = "🤖 *REPORTE QUANT DIARIO*\n\n" + "\n\n".join(alertas)
+    enviar_telegram(mensaje_final)
+else:
+    # Mensaje de Heartbeat: Confirma que el bot funciona aunque no haya trades
+    enviar_telegram("✅ *Sistema Quant Online*\nMercado analizado. Sin señales de acción para hoy.")
