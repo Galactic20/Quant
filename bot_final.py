@@ -13,7 +13,7 @@ TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 # --- CONFIGURACIÓN DE ESTRATEGIA ---
-CAPITAL_INICIAL = 2000
+CAPITAL_INICIAL = 2300
 RIESGO_USD = CAPITAL_INICIAL * 0.01 # $20 USD por operación
 
 # --- DICCIONARIO COMPLETO (Asegúrate de incluir tus 35 activos) ---
@@ -34,7 +34,45 @@ SECTORES = {
 }
 
 # --- TU CARTERA REAL ---
-MIS_POSICIONES = {"AAPL": 2, "BTC-USD": 0.0005, "NVDA": 1}
+MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
+    "ABEV": 0,
+    "AMD": 0,
+    "AMZN": 0,
+    "ASML": 0,
+    "AVGO": 1.00,
+    "BA": 0,
+    "BABA": 0,
+    "BTC-USD": 0,
+    "CRM": 0,
+    "CVX": 0,
+    "ENPH": 0,
+    "Etsy": 0, 
+    "ETH-USD": 0,
+    "GIL": 0,
+    "GLD": 0,
+    "GOOG": 0.17256,
+    "GUSH": 0,
+    "IEF": 4.16276,
+    "INTC": 0,
+    "JNJ": 0,
+    "JPM": 0,
+    "LRCX": 0,
+    "LUV": 0,
+    "MA": 0,
+    "MELI": 0,
+    "META": 0,
+    "MSFT": 0,
+    "NET": 0,
+    "NFLX": 0,
+    "NVDA": 0,
+    "ON": 0,
+    "OXY": 0,
+    "PANW": 0,
+    "QQQ": 0,
+    "SHOP": 0,
+    "TSLA": 0,
+    "TSM": 0,
+    "VTI": 1.79,}
 
 def enviar_telegram(mensaje):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
