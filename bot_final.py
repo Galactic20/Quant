@@ -13,7 +13,7 @@ TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 # --- CONFIGURACIÓN DE ESTRATEGIA ---
-CAPITAL_INICIAL = 2300
+CAPITAL_INICIAL = 2380
 RIESGO_USD = CAPITAL_INICIAL * 0.01 # $20 USD por operación
 
 # --- DICCIONARIO COMPLETO (Asegúrate de incluir tus 35 activos) ---
