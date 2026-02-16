@@ -28,13 +28,15 @@ SECTORES = {
     'TSLA': 'Automotriz/Tech', 'BA': 'Aeroespacial', 'LUV': 'Aerolíneas',
     'JPM': 'Finanzas', 'MA': 'Finanzas', 'MELI': 'E-commerce', 'SHOP': 'E-commerce', 'Etsy': 'E-commerce',
     'NET': 'Ciberseguridad', 'PANW': 'Ciberseguridad', 'BABA': 'China Tech',
-    'CVX': 'Energía', 'OXY': 'Energía', 'GUSH': 'Energía (Apal)',  'OXY': 'Energía',
-    'ENPH': 'Energía', 'JNJ': 'Salud', 'GIL': 'Consumo cíclico', 'ABEV': 'Consumo defensivo'
+    'CVX': 'Energía', 'OXY': 'Energía', 'GUSH': 'Energía (Apal)',
+    'ENPH': 'Energía', 'JNJ': 'Salud', 'GIL': 'Consumo cíclico', 'ABEV': 'Consumo defensivo', 'FLR': 'Construcción', 'GRBK': 'Inmoviliario', 'KD': 'Tech', 
+    'CEG': 'Energía', 'CCJ': 'Mineria-Uranio', 'VST': 'Energía'
     # Agrega aquí el resto de tus tickers...
 }
 
 # --- TU CARTERA REAL ---
 MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
+    "AAPL": 0,      
     "ABEV": 0,
     "AMD": 0,
     "AMZN": 0,
@@ -43,10 +45,12 @@ MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
     "BA": 0,
     "BABA": 0,
     "BTC-USD": 0,
+    "CEG": 0,
+    "CCJ": 0,
     "CRM": 0,
     "CVX": 0,
     "ENPH": 0,
-    "Etsy": 0, 
+    "Etsy": 0,
     "ETH-USD": 0,
     "GIL": 0,
     "GLD": 0,
@@ -68,12 +72,17 @@ MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
     "ON": 0,
     "OXY": 0,
     "PANW": 0,
-    "QQQ": 0,
+    "QQQ": 0.85,
     "SHOP": 0,
     "TSLA": 0,
     "TSM": 0,
-    "VTI": 1.79,}
+    "VTI": 1.79,
+    "FLR": 0,
+    "GRBK": 0,
+    "KD": 0,
+    "VST": 0
 
+}
 def enviar_telegram(mensaje):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": mensaje, "parse_mode": "Markdown"}
