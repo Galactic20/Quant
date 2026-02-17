@@ -76,7 +76,7 @@ MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
     "SHOP": 0,
     "TSLA": 0,
     "TSM": 0,
-    "VTI": 1.79,
+    "VTI": 0,
     "FLR": 0,
     "GRBK": 0,
     "KD": 0,
