@@ -38,7 +38,7 @@ SECTORES = {
 MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
     "AAPL": 0,      
     "ABEV": 0,
-    "AMD": 0,
+    "AMD": 0.63,
     "AMZN": 0,
     "ASML": 0,
     "AVGO": 1.00,
@@ -56,7 +56,7 @@ MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
     "GLD": 0,
     "GOOG": 0.17256,
     "GUSH": 0,
-    "IEF": 4.16276,
+    "IEF": 0,
     "INTC": 0,
     "JNJ": 0,
     "JPM": 0,
