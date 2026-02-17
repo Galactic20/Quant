@@ -54,7 +54,7 @@ MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
     "ETH-USD": 0,
     "GIL": 0,
     "GLD": 0,
-    "GOOG": 0.17256,
+    "GOOG": 0,
     "GUSH": 0,
     "IEF": 0,
     "INTC": 0,
