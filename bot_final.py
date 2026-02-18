@@ -18,69 +18,203 @@ RIESGO_USD = CAPITAL_INICIAL * 0.01 # $20 USD por operación
 
 # --- DICCIONARIO COMPLETO (Asegúrate de incluir tus 35 activos) ---
 SECTORES = {
+
+    # Índices / Macro / Alternativos
     'QQQ': 'Índices (ETF)', 'VTI': 'Índices (ETF)', 'IEF': 'Bonos', 'GLD': 'Oro/Refugio',
     'BTC-USD': 'Crypto', 'ETH-USD': 'Crypto',
+
+    # Big Tech / Mega Caps
+    'AAPL': 'Big Tech', 'MSFT': 'Big Tech', 'META': 'Big Tech',
+    'GOOG': 'Big Tech', 'GOOGL': 'Big Tech', 'AMZN': 'Big Tech',
+
+    # Semiconductores
     'NVDA': 'Semiconductores', 'AMD': 'Semiconductores', 'TSM': 'Semiconductores',
     'AVGO': 'Semiconductores', 'ASML': 'Semiconductores', 'ON': 'Semiconductores',
-    'INTC': 'Semiconductores', 'LRCX': 'Semiconductores',
-    'AAPL': 'Big Tech', 'MSFT': 'Big Tech', 'META': 'Big Tech', 'GOOG': 'Big Tech',
-    'AMZN': 'Big Tech', 'NFLX': 'Big Tech', 'CRM': 'Software/SaaS',
-    'TSLA': 'Automotriz/Tech', 'BA': 'Aeroespacial', 'LUV': 'Aerolíneas',
-    'JPM': 'Finanzas', 'MA': 'Finanzas', 'MELI': 'E-commerce', 'SHOP': 'E-commerce', 'Etsy': 'E-commerce',
-    'NET': 'Ciberseguridad', 'PANW': 'Ciberseguridad', 'BABA': 'China Tech',
-    'CVX': 'Energía', 'OXY': 'Energía', 'GUSH': 'Energía (Apal)',
-    'ENPH': 'Energía', 'JNJ': 'Salud', 'GIL': 'Consumo cíclico', 'ABEV': 'Consumo defensivo', 'FLR': 'Construcción', 'GRBK': 'Inmoviliario', 'KD': 'Tech', 
-    'CEG': 'Energía', 'CCJ': 'Mineria-Uranio', 'VST': 'Energía'
-    # Agrega aquí el resto de tus tickers...
-}
+    'INTC': 'Semiconductores', 'LRCX': 'Semiconductores', 'AMAT': 'Semiconductores',
+    'KLAC': 'Semiconductores', 'MU': 'Semiconductores', 'SWKS': 'Semiconductores',
+    'MCHP': 'Semiconductores', 'QRVO': 'Semiconductores', 'TER': 'Semiconductores',
 
+    # Software / IT / Hardware
+    'CRM': 'Software/SaaS', 'SNOW': 'Software/SaaS', 'ADBE': 'Software/SaaS',
+    'ORCL': 'Software/SaaS', 'INTU': 'Software', 'ACN': 'Servicios IT',
+    'CSCO': 'Networking', 'NTAP': 'Almacenamiento',
+    'SNDK': 'Computer Hardware', 'DELL': 'Hardware', 'HPQ': 'Hardware', 'KD': 'Tech',
+
+    # Internet / Plataformas / Ecommerce
+    'MELI': 'E-commerce', 'SHOP': 'E-commerce', 'Etsy': 'E-commerce',
+    'BABA': 'China Tech', 'UBER': 'Movilidad',
+
+    # Ciberseguridad
+    'NET': 'Ciberseguridad', 'PANW': 'Ciberseguridad',
+
+    # Comunicación / Media / Entretenimiento
+    'NFLX': 'Streaming', 'DIS': 'Medios', 'CMCSA': 'Telecom/Media',
+
+    # Automotriz / Transporte / Aeroespacial
+    'TSLA': 'Automotriz/Tech', 'BA': 'Aeroespacial', 'LUV': 'Aerolíneas', 'UPS': 'Logística',
+
+    # Finanzas
+    'JPM': 'Finanzas', 'MA': 'Finanzas', 'V': 'Finanzas',
+    'BAC': 'Finanzas', 'WFC': 'Finanzas', 'C': 'Finanzas',
+    'GS': 'Finanzas', 'MS': 'Finanzas', 'AIG': 'Finanzas', 'CME': 'Finanzas',
+
+    # Salud / Farma / Biotech
+    'JNJ': 'Salud', 'UNH': 'Salud', 'PFE': 'Salud', 'MRK': 'Salud',
+    'LLY': 'Salud', 'ABT': 'Salud', 'BMY': 'Salud', 'AMGN': 'Biotech',
+
+    # Energía / Renovables / Nuclear
+    'CVX': 'Energía', 'OXY': 'Energía', 'XOM': 'Energía', 'COP': 'Energía',
+    'SLB': 'Servicios petroleros', 'HAL': 'Servicios petroleros',
+    'PSX': 'Refinación', 'VST': 'Energía', 'CEG': 'Energía',
+    'ENPH': 'Energía', 'GUSH': 'Energía (Apal)', 'CCJ': 'Mineria-Uranio',
+
+    # Utilities
+    'NEE': 'Utilities', 'DUK': 'Utilities', 'SO': 'Utilities', 'AEE': 'Utilities',
+
+    # Industriales / Construcción / Maquinaria
+    'CAT': 'Industriales', 'DE': 'Maquinaria', 'GE': 'Industriales',
+    'HON': 'Industriales', 'MMM': 'Industriales', 'FLR': 'Construcción',
+
+    # Materiales / Químicos / Minería
+    'DD': 'Materiales', 'FCX': 'Minería', 'ECL': 'Químicos', 'APD': 'Químicos',
+
+    # Consumo Cíclico
+    'HD': 'Consumo cíclico', 'NKE': 'Consumo cíclico', 'LOW': 'Retail',
+    'SBUX': 'Restaurantes', 'MCD': 'Restaurantes', 'GIL': 'Consumo cíclico',
+
+    # Consumo Defensivo
+    'KO': 'Consumo defensivo', 'PEP': 'Consumo defensivo',
+    'WMT': 'Retail defensivo', 'PG': 'Consumo defensivo',
+    'COST': 'Retail defensivo', 'MO': 'Tabaco', 'ABEV': 'Consumo defensivo',
+
+    # Real Estate / REITs
+    'PLD': 'REIT Industrial', 'AMT': 'REIT Telecom',
+    'EQIX': 'REIT Data Centers', 'SPG': 'REIT Retail', 'GRBK': 'Inmoviliario'
+
+ 
+
+
+}
 # --- TU CARTERA REAL ---
 MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
-    "AAPL": 0,      
-    "ABEV": 0,
-    "AMD": 0.63,
-    "AMZN": 0,
-    "ASML": 0,
-    "AVGO": 1.00,
-    "BA": 0,
-    "BABA": 0,
-    "BTC-USD": 0,
-    "CEG": 0,
-    "CCJ": 0,
-    "CRM": 0,
-    "CVX": 0,
-    "ENPH": 0,
-    "Etsy": 0,
-    "ETH-USD": 0,
-    "GIL": 0,
-    "GLD": 0,
-    "GOOG": 0.86,
-    "GUSH": 0,
-    "IEF": 0,
-    "INTC": 0,
-    "JNJ": 0,
-    "JPM": 0,
-    "LRCX": 0,
-    "LUV": 0,
-    "MA": 0,
-    "MELI": 0,
-    "META": 0,
-    "MSFT": 0,
-    "NET": 0,
-    "NFLX": 0,
-    "NVDA": 0,
-    "ON": 0,
-    "OXY": 0,
-    "PANW": 0,
-    "QQQ": 0.85,
-    "SHOP": 0,
-    "TSLA": 0,
-    "TSM": 0,
-    "VTI": 0,
-    "FLR": 0,
-    "GRBK": 0,
-    "KD": 0,
-    "VST": 0
+       
+"AAPL": 0,
+"ABEV": 0,
+"ABT": 0,
+"ACN": 0,
+"ADBE": 0,
+"AEE": 0,
+"AIG": 0,
+"AMAT": 0,
+"AMD": 0.63,                  
+"AMGN": 0,
+"AMT": 0,
+"AMZN": 0,
+"APD": 0,
+"ASML": 0,
+"AVGO": 1.0,
+"BA": 0,
+"BABA": 0,
+"BAC": 0,
+"BMY": 0,
+"BTC-USD": 0,
+"C": 0,
+"CAT": 0,
+"CCJ": 0,
+"CEG": 0,
+"CME": 0,
+"CMCSA": 0,
+"COP": 0,
+"COST": 0,
+"CRM": 0,
+"CSCO": 0,
+"CVX": 0,
+"DD": 0,
+"DE": 0,
+"DELL": 0,
+"DIS": 0,
+"DUK": 0,
+"ECL": 0,
+"ENPH": 0,
+"EQIX": 0,
+"ETH-USD": 0,
+"Etsy": 0,
+"FCX": 0,
+"FLR": 0,
+"GE": 0,
+"GIL": 0,
+"GLD": 0,
+"GOOG": 0.86,
+"GOOGL": 0,
+"GRBK": 0,
+"GS": 0,
+"GUSH": 0,
+"HAL": 0,
+"HD": 0,
+"HON": 0,
+"HPQ": 0,
+"IEF": 0,
+"INTC": 0,
+"INTU": 0,
+"JNJ": 0,
+"JPM": 0,
+"KD": 0,
+"KLAC": 0,
+"KO": 0,
+"LRCX": 0,
+"LOW": 0,
+"LUV": 0,
+"MA": 0,
+"MCD": 0,
+"MCHP": 0,
+"MELI": 0,
+"META": 0,
+"MMM": 0,
+"MO": 0,
+"MRK": 0,
+"MS": 0,
+"MSFT": 0,
+"MU": 0,
+"NEE": 0,
+"NET": 0,
+"NFLX": 0,
+"NKE": 0,
+"NTAP": 0,
+"NVDA": 0,
+"ON": 0,
+"ORCL": 0,
+"OXY": 0,
+"PANW": 0,
+"PEP": 0,
+"PFE": 0,
+"PG": 0,
+"PLD": 0,
+"PSX": 0,
+"QQQ": 0.85,
+"QRVO": 0,
+"SBUX": 0,
+"SHOP": 0,
+"SLB": 0,
+"SNOW": 0,
+"SO": 0,
+"SPG": 0,
+"SNDK": 0,
+"SWKS": 0,
+"TER": 0,
+"TSLA": 0.23019,
+"TSM": 0,
+"UBER": 0,
+"UNH": 0,
+"UPS": 0,
+"V": 0,
+"VST": 0,
+"VTI": 0,
+"WFC": 0,
+"WMT": 0,
+"XOM": 0,
+"LLY": 0
+
+
 
 }
 def enviar_telegram(mensaje):
