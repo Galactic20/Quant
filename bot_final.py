@@ -44,7 +44,7 @@ SECTORES = {
 
 # --- TU CARTERA REAL ---
 MIS_POSICIONES = {
-    "AMD": 0.63, "AVGO": 1.0, "BABA": 2.09, "GOOG": 0.86, 
+    "AMD": 0.63, "AVGO": 1.0, "GOOG": 0.86, 
     "JPM": 1.27, "QQQ": 0.85, "TSLA": 0.23019
 }
 
