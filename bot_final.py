@@ -4,9 +4,11 @@ import numpy as np
 import requests
 import os
 import warnings
+import math
 from datetime import datetime
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
+pd.options.mode.chained_assignment = None
 
 # --- CONFIGURACIÓN DE NOTIFICACIONES ---
 TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -14,208 +16,38 @@ CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 # --- CONFIGURACIÓN DE ESTRATEGIA ---
 CAPITAL_INICIAL = 2380
-RIESGO_USD = CAPITAL_INICIAL * 0.01 # $20 USD por operación
+RIESGO_USD = CAPITAL_INICIAL * 0.01 # $23.80 USD de riesgo por operación
 
-# --- DICCIONARIO COMPLETO (Asegúrate de incluir tus 35 activos) ---
+# --- DICCIONARIO COMPLETO ---
 SECTORES = {
-
-    # Índices / Macro / Alternativos
-    'QQQ': 'Índices (ETF)', 'VTI': 'Índices (ETF)', 'IEF': 'Bonos', 'GLD': 'Oro/Refugio',
-    'BTC-USD': 'Crypto', 'ETH-USD': 'Crypto',
-
-    # Big Tech / Mega Caps
-    'AAPL': 'Big Tech', 'MSFT': 'Big Tech', 'META': 'Big Tech',
-    'GOOG': 'Big Tech', 'GOOGL': 'Big Tech', 'AMZN': 'Big Tech',
-
-    # Semiconductores
-    'NVDA': 'Semiconductores', 'AMD': 'Semiconductores', 'TSM': 'Semiconductores',
-    'AVGO': 'Semiconductores', 'ASML': 'Semiconductores', 'ON': 'Semiconductores',
-    'INTC': 'Semiconductores', 'LRCX': 'Semiconductores', 'AMAT': 'Semiconductores',
-    'KLAC': 'Semiconductores', 'MU': 'Semiconductores', 'SWKS': 'Semiconductores',
-    'MCHP': 'Semiconductores', 'QRVO': 'Semiconductores', 'TER': 'Semiconductores',
-
-    # Software / IT / Hardware
-    'CRM': 'Software/SaaS', 'SNOW': 'Software/SaaS', 'ADBE': 'Software/SaaS',
-    'ORCL': 'Software/SaaS', 'INTU': 'Software', 'ACN': 'Servicios IT',
-    'CSCO': 'Networking', 'NTAP': 'Almacenamiento',
-    'SNDK': 'Computer Hardware', 'DELL': 'Hardware', 'HPQ': 'Hardware', 'KD': 'Tech',
-
-    # Internet / Plataformas / Ecommerce
-    'MELI': 'E-commerce', 'SHOP': 'E-commerce', 'Etsy': 'E-commerce',
-    'BABA': 'China Tech', 'UBER': 'Movilidad',
-
-    # Ciberseguridad
-    'NET': 'Ciberseguridad', 'PANW': 'Ciberseguridad',
-
-    # Comunicación / Media / Entretenimiento
-    'NFLX': 'Streaming', 'DIS': 'Medios', 'CMCSA': 'Telecom/Media',
-
-    # Automotriz / Transporte / Aeroespacial
-    'TSLA': 'Automotriz/Tech', 'BA': 'Aeroespacial', 'LUV': 'Aerolíneas', 'UPS': 'Logística',
-
-    # Finanzas
-    'JPM': 'Finanzas', 'MA': 'Finanzas', 'V': 'Finanzas',
-    'BAC': 'Finanzas', 'WFC': 'Finanzas', 'C': 'Finanzas',
-    'GS': 'Finanzas', 'MS': 'Finanzas', 'AIG': 'Finanzas', 'CME': 'Finanzas',
-
-    # Salud / Farma / Biotech
-    'JNJ': 'Salud', 'UNH': 'Salud', 'PFE': 'Salud', 'MRK': 'Salud',
-    'LLY': 'Salud', 'ABT': 'Salud', 'BMY': 'Salud', 'AMGN': 'Biotech',
-
-    # Energía / Renovables / Nuclear
-    'CVX': 'Energía', 'OXY': 'Energía', 'XOM': 'Energía', 'COP': 'Energía',
-    'SLB': 'Servicios petroleros', 'HAL': 'Servicios petroleros',
-    'PSX': 'Refinación', 'VST': 'Energía', 'CEG': 'Energía',
-    'ENPH': 'Energía', 'GUSH': 'Energía (Apal)', 'CCJ': 'Mineria-Uranio',
-
-    # Utilities
-    'NEE': 'Utilities', 'DUK': 'Utilities', 'SO': 'Utilities', 'AEE': 'Utilities',
-
-    # Industriales / Construcción / Maquinaria
-    'CAT': 'Industriales', 'DE': 'Maquinaria', 'GE': 'Industriales',
-    'HON': 'Industriales', 'MMM': 'Industriales', 'FLR': 'Construcción',
-
-    # Materiales / Químicos / Minería
-    'DD': 'Materiales', 'FCX': 'Minería', 'ECL': 'Químicos', 'APD': 'Químicos',
-
-    # Consumo Cíclico
-    'HD': 'Consumo cíclico', 'NKE': 'Consumo cíclico', 'LOW': 'Retail',
-    'SBUX': 'Restaurantes', 'MCD': 'Restaurantes', 'GIL': 'Consumo cíclico',
-
-    # Consumo Defensivo
-    'KO': 'Consumo defensivo', 'PEP': 'Consumo defensivo',
-    'WMT': 'Retail defensivo', 'PG': 'Consumo defensivo',
-    'COST': 'Retail defensivo', 'MO': 'Tabaco', 'ABEV': 'Consumo defensivo',
-
-    # Real Estate / REITs
-    'PLD': 'REIT Industrial', 'AMT': 'REIT Telecom',
-    'EQIX': 'REIT Data Centers', 'SPG': 'REIT Retail', 'GRBK': 'Inmoviliario'
-
- 
-
-
+    'QQQ': 'Índices', 'VTI': 'Índices', 'IEF': 'Bonos', 'GLD': 'Oro', 'BTC-USD': 'Crypto', 'ETH-USD': 'Crypto',
+    'AAPL': 'Tech', 'MSFT': 'Tech', 'META': 'Tech', 'GOOG': 'Tech', 'GOOGL': 'Tech', 'AMZN': 'Tech',
+    'NVDA': 'Semi', 'AMD': 'Semi', 'TSM': 'Semi', 'AVGO': 'Semi', 'ASML': 'Semi', 'ON': 'Semi',
+    'INTC': 'Semi', 'LRCX': 'Semi', 'AMAT': 'Semi', 'KLAC': 'Semi', 'MU': 'Semi', 'SWKS': 'Semi',
+    'MCHP': 'Semi', 'QRVO': 'Semi', 'TER': 'Semi', 'CRM': 'SaaS', 'SNOW': 'SaaS', 'ADBE': 'SaaS',
+    'ORCL': 'SaaS', 'INTU': 'Software', 'ACN': 'IT', 'CSCO': 'Net', 'NTAP': 'Storage',
+    'SNDK': 'Hardware', 'DELL': 'Hardware', 'HPQ': 'Hardware', 'KD': 'Tech',
+    'MELI': 'E-com', 'SHOP': 'E-com', 'Etsy': 'E-com', 'BABA': 'China', 'UBER': 'Movilidad',
+    'NET': 'Ciber', 'PANW': 'Ciber', 'NFLX': 'Stream', 'DIS': 'Medios', 'CMCSA': 'Media',
+    'TSLA': 'Auto', 'BA': 'Aero', 'LUV': 'Aero', 'UPS': 'Log', 'JPM': 'Fin', 'MA': 'Fin', 'V': 'Fin',
+    'BAC': 'Fin', 'WFC': 'Fin', 'C': 'Fin', 'GS': 'Fin', 'MS': 'Fin', 'AIG': 'Fin', 'CME': 'Fin',
+    'JNJ': 'Salud', 'UNH': 'Salud', 'PFE': 'Salud', 'MRK': 'Salud', 'LLY': 'Salud', 'ABT': 'Salud', 
+    'BMY': 'Salud', 'AMGN': 'Bio', 'CVX': 'Energía', 'OXY': 'Energía', 'XOM': 'Energía', 'COP': 'Energía',
+    'SLB': 'Petrol', 'HAL': 'Petrol', 'PSX': 'Refin', 'VST': 'Energía', 'CEG': 'Energía',
+    'ENPH': 'Energía', 'GUSH': 'Energía', 'CCJ': 'Uranio', 'NEE': 'Util', 'DUK': 'Util', 'SO': 'Util', 
+    'AEE': 'Util', 'CAT': 'Ind', 'DE': 'Maq', 'GE': 'Ind', 'HON': 'Ind', 'MMM': 'Ind', 'FLR': 'Const',
+    'DD': 'Mat', 'FCX': 'Min', 'ECL': 'Quím', 'APD': 'Quím', 'HD': 'Cons', 'NKE': 'Cons', 'LOW': 'Ret',
+    'SBUX': 'Rest', 'MCD': 'Rest', 'GIL': 'Cons', 'KO': 'Defensivo', 'PEP': 'Defensivo',
+    'WMT': 'Ret', 'PG': 'Defensivo', 'COST': 'Ret', 'MO': 'Tabaco', 'ABEV': 'Defensivo',
+    'PLD': 'REIT', 'AMT': 'REIT', 'EQIX': 'REIT', 'SPG': 'REIT', 'GRBK': 'Inm'
 }
+
 # --- TU CARTERA REAL ---
-MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
-       
-"AAPL": 0,
-"ABEV": 0,
-"ABT": 0,
-"ACN": 0,
-"ADBE": 0,
-"AEE": 0,
-"AIG": 0,
-"AMAT": 0,
-"AMD": 0.63,
-"AMGN": 0,
-"AMT": 0,
-"AMZN": 0,
-"APD": 0,
-"ASML": 0,
-"AVGO": 1.0,
-"BA": 0,
-"BABA": 2.09,
-"BAC": 0,
-"BMY": 0,
-"BTC-USD": 0,
-"C": 0,
-"CAT": 0,
-"CCJ": 0,
-"CEG": 0,
-"CME": 0,
-"CMCSA": 0,
-"COP": 0,
-"COST": 0,
-"CRM": 0,
-"CSCO": 0,
-"CVX": 0,
-"DD": 0,
-"DE": 0,
-"DELL": 0,
-"DIS": 0,
-"DUK": 0,
-"ECL": 0,
-"ENPH": 0,
-"EQIX": 0,
-"ETH-USD": 0,
-"Etsy": 0,
-"FCX": 0,
-"FLR": 0,
-"GE": 0,
-"GIL": 0,
-"GLD": 0,
-"GOOG": 0.86,
-"GOOGL": 0,
-"GRBK": 0,
-"GS": 0,
-"GUSH": 0,
-"HAL": 0,
-"HD": 0,
-"HON": 0,
-"HPQ": 0,
-"IEF": 0,
-"INTC": 0,
-"INTU": 0,
-"JNJ": 0,
-"JPM": 1.27,
-"KD": 0,
-"KLAC": 0,
-"KO": 0,
-"LRCX": 0,
-"LOW": 0,
-"LUV": 0,
-"MA": 0,
-"MCD": 0,
-"MCHP": 0,
-"MELI": 0,
-"META": 0,
-"MMM": 0,
-"MO": 0,
-"MRK": 0,
-"MS": 0,
-"MSFT": 0,
-"MU": 0,
-"NEE": 0,
-"NET": 0,
-"NFLX": 0,
-"NKE": 0,
-"NTAP": 0,
-"NVDA": 0,
-"ON": 0,
-"ORCL": 0,
-"OXY": 0,
-"PANW": 0,
-"PEP": 0,
-"PFE": 0,
-"PG": 0,
-"PLD": 0,
-"PSX": 0,
-"QQQ": 0.85,
-"QRVO": 0,
-"SBUX": 0,
-"SHOP": 0,
-"SLB": 0,
-"SNOW": 0,
-"SO": 0,
-"SPG": 0,
-"SNDK": 0,
-"SWKS": 0,
-"TER": 0,
-"TSLA": 0.23019,
-"TSM": 0,
-"UBER": 0,
-"UNH": 0,
-"UPS": 0,
-"V": 0,
-"VST": 0,
-"VTI": 0,
-"WFC": 0,
-"WMT": 0,
-"XOM": 0,
-"LLY": 0
-
-
+MIS_POSICIONES = {
+    "AMD": 0.63, "AVGO": 1.0, "BABA": 2.09, "GOOG": 0.86, 
+    "JPM": 1.27, "QQQ": 0.85, "TSLA": 0.23019
 }
+
 def enviar_telegram(mensaje):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": mensaje, "parse_mode": "Markdown"}
@@ -226,54 +58,83 @@ def enviar_telegram(mensaje):
 
 def analizar_mercado_sano():
     try:
-        spy = yf.download("SPY", period="1y", progress=False)
-        spy.columns = [c[0] if isinstance(c, tuple) else c for c in spy.columns]
-        return bool(spy['Close'].iloc[-1] > spy['Close'].rolling(200).mean().iloc[-1])
-    except: return True
+        # Descarga conjunta del índice y volatilidad
+        df_mercado = yf.download(["SPY", "^VIX"], period="1y", progress=False, auto_adjust=True)
+        spy_close = df_mercado['Close']['SPY']
+        vix_close = df_mercado['Close']['^VIX']
+        
+        spy_alcista = spy_close.iloc[-1] > spy_close.rolling(200).mean().iloc[-1]
+        vix_controlado = vix_close.iloc[-1] < 28 # Sobre 28 es zona de pánico, no compramos
+        return spy_alcista and vix_controlado
+    except: 
+        return True
+
+# ==========================================
+# 🚀 MEJORA 1: DESCARGA EN BLOQUE SUPER RÁPIDA
+# ==========================================
+print("Descargando datos globales...")
+tickers_lista = list(SECTORES.keys())
+datos_globales = yf.download(tickers_lista, period="3y", progress=False, group_by="ticker", auto_adjust=True)
 
 def motor_quant_cloud(ticker, mercado_sano):
     try:
-        df = yf.download(ticker, period="3y", progress=False)
+        # Filtrar datos de la memoria, no de internet
+        df = datos_globales[ticker].dropna()
         if df.empty or len(df) < 200: return None
-        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
 
-        # Indicadores
         df['SMA_200'] = df['Close'].rolling(window=200).mean()
+        
+        # RSI
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
         loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
         df['RSI'] = 100 - (100 / (1 + (gain / loss)))
+        
+        # ATR
         df['TR'] = pd.concat([(df['High']-df['Low']), abs(df['High']-df['Close'].shift()), abs(df['Low']-df['Close'].shift())], axis=1).max(axis=1)
         df['ATR'] = df['TR'].rolling(window=14).mean()
 
+        # 🚀 MEJORA 2: CHANDELIER EXIT (Trailing Stop)
+        df['Max_High_14'] = df['High'].rolling(window=14).max()
+        df['Chandelier_Exit'] = df['Max_High_14'] - (3 * df['ATR'])
+
         last = df.iloc[-1]
         p, rsi, sma, atr = float(last['Close']), float(last['RSI']), float(last['SMA_200']), float(last['ATR'])
+        sl_quant = float(last['Chandelier_Exit'])
         
-        # SL/TP Dinámicos
         dist_sl = atr * 2.5
-        sl = p - dist_sl
-        tp = p + (atr * 6)
+        sl_inicial = p - dist_sl
+        tp_inicial = p + (atr * 6)
         
-        # Señal
-        senal = "🟢 COMPRA" if p > sma and rsi < 40 else "🔴 VENTA" if rsi > 70 else "⚪ BAJISTA" if p < sma else "👍 ALCISTA"
         tengo = MIS_POSICIONES.get(ticker, 0)
         
-        # Filtro de Alertas Críticas
+        # --- LÓGICA DE ALERTAS ---
         if tengo > 0:
-            if senal == "⚪ BAJISTA": return f"🚨 *VENTA URGENTE*: {ticker}\nPrecio: {round(p,2)}\n*Motivo*: Tendencia de largo plazo rota."
-            if senal == "🔴 VENTA": return f"💰 *TOMAR GANANCIAS*: {ticker}\nPrecio: {round(p,2)}\n*Motivo*: Sobrecompra (RSI: {round(rsi,1)})"
-        elif senal == "🟢 COMPRA" and mercado_sano:
-            cant = round(RIESGO_USD / dist_sl, 2)
-            return f"🛒 *NUEVA COMPRA*: {ticker}\nPrecio: {round(p,2)}\nCant. Sugerida: {cant}\nSL: {round(sl,2)} | TP: {round(tp,2)}"
+            if p < sma: 
+                return f"🚨 *VENTA URGENTE*: {ticker}\nPrecio: ${round(p,2)}\n*Motivo*: Rompió SMA 200 (Tendencia bajista)."
+            elif p < sl_quant:
+                return f"💰 *VENTA POR STOP DINÁMICO*: {ticker}\nPrecio: ${round(p,2)}\n*Motivo*: Perdió soporte del Chandelier Exit (${round(sl_quant,2)})."
+            elif rsi > 75:
+                # Ya no manda vender ciegamente, solo avisa para ajustar el Stop.
+                return f"⚠️ *ALERTA SOBRECOMPRA*: {ticker}\nPrecio: ${round(p,2)}\n*Acción*: Ajusta tu Stop Loss manualmente a ${round(sl_quant,2)}."
+                
+        elif p > sma and rsi < 40 and mercado_sano:
+            # 🚀 MEJORA 3: FRACCIONES SEGURAS (math.floor)
+            cant = math.floor(RIESGO_USD / dist_sl)
+            if cant > 0:
+                riesgo_real = cant * dist_sl
+                return f"🛒 *NUEVA COMPRA*: {ticker}\nPrecio: ${round(p,2)}\nCant. Sugerida: {cant} acciones\nRiesgo: ${round(riesgo_real,2)}\nSL: ${round(sl_inicial,2)} | TP: ${round(tp_inicial,2)}"
         
         return None
-    except: return None
+    except Exception as e:
+        return None
 
 # --- EJECUCIÓN PRINCIPAL ----
+print("Analizando señales...")
 mercado_ok = analizar_mercado_sano()
 alertas = []
 
-for t in SECTORES.keys():
+for t in tickers_lista:
     res = motor_quant_cloud(t, mercado_ok)
     if res: alertas.append(res)
 
@@ -281,6 +142,7 @@ if alertas:
     mensaje_final = "🤖 *REPORTE QUANT DIARIO*\n\n" + "\n\n".join(alertas)
     enviar_telegram(mensaje_final)
 else:
-    # Mensaje de Heartbeat: Confirma que el bot funciona aunque no haya trades
-    enviar_telegram("✅ *Sistema Quant Online*\nMercado analizado. Sin señales de acción para hoy.")
-  
+    # Mensaje de Heartbeat con contexto del mercado
+    estado = "Sano (VIX bajo y SPY Alcista)" if mercado_ok else "Volátil/Bajista (Precaución)"
+    enviar_telegram(f"✅ *Sistema Quant Online*\nEstado del Mercado: {estado}\nSin señales de acción para hoy.")
+print("Proceso Finalizado.")
