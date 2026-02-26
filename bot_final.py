@@ -106,7 +106,7 @@ MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
 "AEE": 0,
 "AIG": 0,
 "AMAT": 0,
-"AMD": 0.63,                  
+"AMD": 0.63,
 "AMGN": 0,
 "AMT": 0,
 "AMZN": 0,
@@ -114,7 +114,7 @@ MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
 "ASML": 0,
 "AVGO": 1.0,
 "BA": 0,
-"BABA": 0,
+"BABA": 2.09,
 "BAC": 0,
 "BMY": 0,
 "BTC-USD": 0,
@@ -157,7 +157,7 @@ MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
 "INTC": 0,
 "INTU": 0,
 "JNJ": 0,
-"JPM": 0,
+"JPM": 1.27,
 "KD": 0,
 "KLAC": 0,
 "KO": 0,
@@ -213,7 +213,6 @@ MIS_POSICIONES = { # Ejemplo: tienes 2 acciones
 "WMT": 0,
 "XOM": 0,
 "LLY": 0
-
 
 
 }
