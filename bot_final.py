@@ -43,9 +43,15 @@ SECTORES = {
 }
 
 # --- TU CARTERA REAL ---
+# (Recuerda actualizar esto si decides comprar BA o BAC hoy)
 MIS_POSICIONES = {
-    "AMD": 0.63, "AVGO": 1.0, "GOOG": 0.86, 
-    "JPM": 1.27, "QQQ": 0.85, "TSLA": 0.23019
+    "AMD": 0.63, 
+    "AVGO": 1.0, 
+    "BA": 1.0, 
+    "BAC": 5.0,
+    "GOOG": 0.86,  
+    "QQQ": 0.85, 
+    "TSLA": 0.23019
 }
 
 def enviar_telegram(mensaje):
@@ -58,79 +64,87 @@ def enviar_telegram(mensaje):
 
 def analizar_mercado_sano():
     try:
-        # Descarga conjunta del índice y volatilidad
         df_mercado = yf.download(["SPY", "^VIX"], period="1y", progress=False, auto_adjust=True)
-        spy_close = df_mercado['Close']['SPY']
-        vix_close = df_mercado['Close']['^VIX']
+        if isinstance(df_mercado.columns, pd.MultiIndex):
+            df_mercado.columns = df_mercado.columns.get_level_values(0)
+            
+        spy_close = df_mercado['SPY']
+        vix_close = df_mercado['^VIX']
         
         spy_alcista = spy_close.iloc[-1] > spy_close.rolling(200).mean().iloc[-1]
-        vix_controlado = vix_close.iloc[-1] < 28 # Sobre 28 es zona de pánico, no compramos
+        vix_controlado = vix_close.iloc[-1] < 28 # Si el VIX > 28, bloqueamos compras
         return spy_alcista and vix_controlado
     except: 
         return True
 
-# ==========================================
-# 🚀 MEJORA 1: DESCARGA EN BLOQUE SUPER RÁPIDA
-# ==========================================
-print("Descargando datos globales...")
+# Descarga en bloque (1 año para calcular SMA 200 sin demoras)
+print("Descargando datos globales para el Bot...")
 tickers_lista = list(SECTORES.keys())
-datos_globales = yf.download(tickers_lista, period="3y", progress=False, group_by="ticker", auto_adjust=True)
+datos_globales = yf.download(tickers_lista, period="1y", progress=False, group_by="ticker", auto_adjust=True)
 
 def motor_quant_cloud(ticker, mercado_sano):
     try:
-        # Filtrar datos de la memoria, no de internet
-        df = datos_globales[ticker].dropna()
-        if df.empty or len(df) < 200: return None
-
-        df['SMA_200'] = df['Close'].rolling(window=200).mean()
+        df = datos_globales[ticker].dropna() if len(tickers_lista) > 1 else datos_globales.dropna()
+        if len(df) < 200: return None
         
-        # RSI
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        # 1. Indicadores Base
+        df['SMA_200'] = df['Close'].rolling(window=200).mean()
+        df['RV'] = df['Volume'] / df['Volume'].rolling(20).mean()
+        
+        # 2. RSI Exacto
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
         loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
         df['RSI'] = 100 - (100 / (1 + (gain / loss)))
         
-        # ATR
+        # 3. ATR y Chandelier Exit (Stop Loss Dinámico)
         df['TR'] = pd.concat([(df['High']-df['Low']), abs(df['High']-df['Close'].shift()), abs(df['Low']-df['Close'].shift())], axis=1).max(axis=1)
         df['ATR'] = df['TR'].rolling(window=14).mean()
-
-        # 🚀 MEJORA 2: CHANDELIER EXIT (Trailing Stop)
         df['Max_High_14'] = df['High'].rolling(window=14).max()
         df['Chandelier_Exit'] = df['Max_High_14'] - (3 * df['ATR'])
 
+        # Valores de Hoy
         last = df.iloc[-1]
-        p, rsi, sma, atr = float(last['Close']), float(last['RSI']), float(last['SMA_200']), float(last['ATR'])
+        p = float(last['Close'])
+        o = float(last['Open'])
+        rsi = float(last['RSI'])
+        sma = float(last['SMA_200'])
+        atr = float(last['ATR'])
+        vol_rel = float(last['RV'])
         sl_quant = float(last['Chandelier_Exit'])
         
+        # Stop Loss y Take Profit inicial para nuevas compras
         dist_sl = atr * 2.5
         sl_inicial = p - dist_sl
         tp_inicial = p + (atr * 6)
         
         tengo = MIS_POSICIONES.get(ticker, 0)
         
-        # --- LÓGICA DE ALERTAS ---
+        # --- LÓGICA DE SALIDA (Para acciones en tu cartera) ---
         if tengo > 0:
             if p < sma: 
                 return f"🚨 *VENTA URGENTE*: {ticker}\nPrecio: ${round(p,2)}\n*Motivo*: Rompió SMA 200 (Tendencia bajista)."
             elif p < sl_quant:
                 return f"💰 *VENTA POR STOP DINÁMICO*: {ticker}\nPrecio: ${round(p,2)}\n*Motivo*: Perdió soporte del Chandelier Exit (${round(sl_quant,2)})."
             elif rsi > 75:
-                # Ya no manda vender ciegamente, solo avisa para ajustar el Stop.
                 return f"⚠️ *ALERTA SOBRECOMPRA*: {ticker}\nPrecio: ${round(p,2)}\n*Acción*: Ajusta tu Stop Loss manualmente a ${round(sl_quant,2)}."
                 
-        elif p > sma and rsi < 40 and mercado_sano:
-            # 🚀 MEJORA 3: FRACCIONES SEGURAS (math.floor)
-            cant = math.floor(RIESGO_USD / dist_sl)
-            if cant > 0:
-                riesgo_real = cant * dist_sl
-                return f"🛒 *NUEVA COMPRA*: {ticker}\nPrecio: ${round(p,2)}\nCant. Sugerida: {cant} acciones\nRiesgo: ${round(riesgo_real,2)}\nSL: ${round(sl_inicial,2)} | TP: ${round(tp_inicial,2)}"
+        # --- LÓGICA DE ENTRADA ESTRICTA (Solo si no la tienes) ---
+        elif tengo == 0 and mercado_sano:
+            if (rsi < 42) and (vol_rel > 1.2) and (p > o) and (p > sma) and (p > sl_quant):
+                cant = math.floor(RIESGO_USD / dist_sl)
+                if cant > 0:
+                    riesgo_real = cant * dist_sl
+                    return f"🛒 *NUEVA COMPRA ESTRICTA*: {ticker}\nPrecio: ${round(p,2)}\nCant. Sugerida: {cant} acciones\nRiesgo: ${round(riesgo_real,2)}\nSL: ${round(sl_inicial,2)} | TP: ${round(tp_inicial,2)}"
         
         return None
     except Exception as e:
         return None
 
 # --- EJECUCIÓN PRINCIPAL ----
-print("Analizando señales...")
 mercado_ok = analizar_mercado_sano()
 alertas = []
 
@@ -142,7 +156,5 @@ if alertas:
     mensaje_final = "🤖 *REPORTE QUANT DIARIO*\n\n" + "\n\n".join(alertas)
     enviar_telegram(mensaje_final)
 else:
-    # Mensaje de Heartbeat con contexto del mercado
     estado = "Sano (VIX bajo y SPY Alcista)" if mercado_ok else "Volátil/Bajista (Precaución)"
-    enviar_telegram(f"✅ *Sistema Quant Online*\nEstado del Mercado: {estado}\nSin señales de acción para hoy.")
-print("Proceso Finalizado.")
+    enviar_telegram(f"✅ *Sistema Quant Online*\nEstado del Mercado: {estado}\nSin señales de acción bajo filtros estrictos para hoy.")
