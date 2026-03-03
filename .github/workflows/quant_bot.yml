@@ -1,0 +1,61 @@
+name: Quant Bot Diario
+
+on:
+  schedule:
+    # 14:30 UTC = 9:30 AM Nueva York (EST, horario de invierno)
+    # 13:30 UTC = 9:30 AM Nueva York (EDT, horario de verano)
+    # Para cambiar el horario: https://crontab.guru
+    # APERTURA 8:45 AM NY (EDT/verano = 12:45 UTC, EST/invierno = 13:45 UTC)
+    - cron: '45 13 * * 1-5'
+    # CIERRE 3:55 PM NY (EDT/verano = 19:55 UTC, EST/invierno = 20:55 UTC)
+    - cron: '55 20 * * 1-5'
+
+  # Ejecucion manual -> siempre corre en MODO CIERRE (escaner completo)
+  workflow_dispatch:
+
+jobs:
+  ejecutar-bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Necesario para el git push de posiciones.json
+
+    steps:
+
+      # 1. Descarga el codigo del repositorio al servidor de GitHub
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      # 2. Instala Python 3.11
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Cache de pip para acelerar ejecuciones futuras
+      - name: Cache de pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: quant-pip-v1
+
+      # 4. Instala las librerias de Python necesarias
+      - name: Instalar dependencias
+        run: |
+          pip install --upgrade pip
+          pip install yfinance pandas numpy requests tabulate
+
+      # 5. Ejecuta el bot usando los secretos de Telegram
+      #    Configurar en: GitHub repo > Settings > Secrets > Actions
+      #    Crear dos secretos: TELEGRAM_TOKEN y TELEGRAM_CHAT_ID
+      - name: Ejecutar Quant Bot
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot_telegram.py
+
+      # 6. Si posiciones.json cambio (nueva compra o cierre),
+      #    lo guarda de vuelta al repositorio automaticamente
+      - name: Guardar posiciones.json
+        run: |
+          git config user.name  'Quant Bot'
+         
