@@ -1,0 +1,48 @@
+quant_bot.yml:
+name: Quant Bot Diario
+
+on:
+  schedule:
+    # Corre de lunes a viernes a las 9:30 AM hora de Nueva York (UTC-5)
+    # En horario de verano (EDT) = 13:30 UTC
+    # En horario de invierno (EST) = 14:30 UTC
+    - cron: '30 14 * * 1-5'
+  
+  # Permite ejecutarlo manualmente desde la pestaña Actions
+  workflow_dispatch:
+
+jobs:
+  ejecutar-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descarga el código del repositorio
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      # 2. Instala Python
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Instala las librerías necesarias
+      - name: Instalar dependencias
+        run: |
+          pip install yfinance pandas numpy requests tabulate
+
+      # 4. Ejecuta el bot
+      - name: Ejecutar Quant Bot
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot_telegram.py
+
+      # 5. Guarda posiciones.json actualizado de vuelta al repo
+      - name: Guardar posiciones.json
+        run: |
+          git config user.name  "Quant Bot"
+          git config user.email "bot@quant.local"
+          git add posiciones.json
+          git diff --staged --quiet || git commit -m "Auto: actualizar posiciones $(date +%Y-%m-%d)"
+          git push
