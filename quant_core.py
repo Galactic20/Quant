@@ -271,18 +271,23 @@ REGIMENES = {
 
 def detectar_regimen(p: dict = PARAMETROS) -> tuple[str, dict]:
     """
-    Descarga SPY y VIX, evalúa el estado del mercado y devuelve
-    (nombre_regimen: str, contexto: dict).
+    Descarga SPY y VIX por separado (evita problemas de MultiIndex
+    al descargar varios tickers juntos con yfinance), evalúa el estado
+    del mercado y devuelve (nombre_regimen: str, contexto: dict).
     """
     try:
-        raw = yf.download(
-            ["SPY", "^VIX"], period="1y",
-            progress=False, auto_adjust=True
-        )
-        raw = _normalizar_columnas(raw)
+        # Descarga individual para evitar MultiIndex
+        df_spy = yf.download("SPY",  period="1y", progress=False, auto_adjust=True)
+        df_vix = yf.download("^VIX", period="1y", progress=False, auto_adjust=True)
 
-        spy_close = raw['Close']['SPY'].dropna()
-        vix_close = raw['Close']['^VIX'].dropna()
+        df_spy = _normalizar_columnas(df_spy)
+        df_vix = _normalizar_columnas(df_vix)
+
+        if df_spy.empty or df_vix.empty:
+            raise ValueError("yfinance devolvió datos vacíos para SPY o ^VIX")
+
+        spy_close = df_spy['Close'].dropna()
+        vix_close = df_vix['Close'].dropna()
 
         spy       = float(spy_close.iloc[-1])
         sma200    = float(spy_close.rolling(200).mean().iloc[-1])
@@ -304,11 +309,11 @@ def detectar_regimen(p: dict = PARAMETROS) -> tuple[str, dict]:
             regimen = "RECUPERACION"
 
         contexto = {
-            "regimen":     regimen,
-            "SPY":         round(spy,    2),
-            "SPY_SMA200":  round(sma200, 2),
-            "SPY_SMA50":   round(sma50,  2),
-            "VIX":         round(vix,    2),
+            "regimen":    regimen,
+            "SPY":        round(spy,   2),
+            "SPY_SMA200": round(sma200,2),
+            "SPY_SMA50":  round(sma50, 2),
+            "VIX":        round(vix,   2),
             **REGIMENES[regimen],
         }
         return regimen, contexto
@@ -316,10 +321,14 @@ def detectar_regimen(p: dict = PARAMETROS) -> tuple[str, dict]:
     except Exception as e:
         print(f"⚠️ Error detectando régimen: {e}")
         return "TENDENCIA_ALCISTA", {
-            "regimen": "TENDENCIA_ALCISTA",
+            "regimen":     "TENDENCIA_ALCISTA",
             "descripcion": "Desconocido (error de datos)",
-            "emoji": "⚠️",
-            "accion": "Usar parámetros estándar."
+            "emoji":       "⚠️",
+            "accion":      "Usar parámetros estándar.",
+            "SPY":         "N/A",
+            "SPY_SMA200":  "N/A",
+            "SPY_SMA50":   "N/A",
+            "VIX":         "N/A",
         }
 
 # Alias para compatibilidad con código existente
