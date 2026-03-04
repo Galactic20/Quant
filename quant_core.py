@@ -86,8 +86,14 @@ PARAMETROS = {
     # ── Filtro de Correlación (máx. posiciones por sector) ──
     "MAX_POR_SECTOR":        1,    # Solo 1 operación abierta/nueva por sector
 
+    # ── Filtro de Stop Dinámico (margen para evitar falsas rupturas) ──
+    # El precio debe cerrar al menos MARGEN_CHANDELIER × ATR por debajo
+    # del Chandelier Exit para activar la alerta. Filtra ruido intradiario
+    # en activos de alta volatilidad como AMD o TSLA.
+    "MARGEN_CHANDELIER":  0.10,   # 10% del ATR como colchón mínimo
+
     # ── Backtest ──
-    "DIAS_REVISION":        10,    # Horizonte forward del backtest
+    "DIAS_REVISION":        10,
 
     # ── Capital ──
     "CAPITAL_INICIAL":    2380,
@@ -595,8 +601,22 @@ def es_senal_compra(row: pd.Series, regimen: str,
 def es_senal_venta_urgente(row: pd.Series) -> bool:
     return float(row['Close']) < float(row['SMA_200'])
 
-def es_senal_stop_dinamico(row: pd.Series) -> bool:
-    return float(row['Close']) < float(row['Chandelier_Exit'])
+def es_senal_stop_dinamico(row: pd.Series, p: dict = PARAMETROS) -> bool:
+    """
+    Activa el stop solo si el precio cerró al menos MARGEN_CHANDELIER × ATR
+    por debajo del Chandelier Exit. Evita falsas alertas en activos de alta
+    volatilidad (TSLA, AMD) donde el precio roza el soporte sin romperlo.
+
+    Ejemplo con AMD: ATR=6.50, MARGEN=0.10
+      → el precio debe estar al menos $0.65 bajo el Chandelier
+      → una ruptura de $0.59 no activa la alerta (era ruido)
+    """
+    try:
+        margen = float(row['ATR']) * p.get("MARGEN_CHANDELIER", 0.10)
+        return float(row['Close']) < float(row['Chandelier_Exit']) - margen
+    except (KeyError, TypeError, ValueError):
+        # Fallback sin margen si falta el ATR
+        return float(row['Close']) < float(row['Chandelier_Exit'])
 
 def es_senal_sobrecompra(row: pd.Series, p: dict = PARAMETROS) -> bool:
     return float(row['RSI']) > p["RSI_SOBRECOMPRA"]
@@ -655,7 +675,8 @@ def motor_quant(ticker: str,
                     "accion":  "🚨 VENDER TODO",
                     "unidades_en_cartera": tengo,
                 }
-            if es_senal_stop_dinamico(last):
+            if es_senal_stop_dinamico(last, p):
+                margen = round(float(last['ATR']) * p.get("MARGEN_CHANDELIER", 0.10), 2)
                 return {
                     "tipo":    "STOP_DINAMICO",
                     "ticker":  ticker, "sector": sector,
@@ -663,7 +684,7 @@ def motor_quant(ticker: str,
                     "rsi":     round(rsi,    1),
                     "rv":      round(rv,     2),
                     "chandelier": round(chandelier, 2),
-                    "motivo":  f"Bajo Chandelier Exit (${round(chandelier,2)})",
+                    "motivo":  f"Bajo Chandelier Exit (${round(chandelier,2)}) con margen ${margen}",
                     "accion":  "💰 VENTA POR STOP",
                     "unidades_en_cartera": tengo,
                 }
