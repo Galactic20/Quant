@@ -40,7 +40,7 @@ def detectar_modo() -> str:
     basándose en la hora UTC actual.
 
       < 15:00 UTC  →  APERTURA  (8:45 AM NY)
-      >= 15:00 UTC →  CIERRE    (3:55 PM NY)
+      >= 15:00 UTC →  CIERRE    (3:45 PM NY)
 
     Si se ejecuta manualmente (workflow_dispatch), corre en modo CIERRE.
     """
