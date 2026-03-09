@@ -44,8 +44,7 @@ SECTORES = {
 
 # --- TU CARTERA REAL (Actualizada: sin JPM, BA, BAC) ---
 MIS_POSICIONES = {
-    "AMD": 0.63, "AVGO": 1.0, "GOOG": 0.86, 
-    "QQQ": 0.85, "TSLA": 0.23019
+    "VTI": 0.91194
     # Nota: BABA ya se había vendido. Eliminé JPM porque te mandó a venderlo hoy. 
     # BA y BAC no las agrego porque te acaba de sacar hoy.
 }
