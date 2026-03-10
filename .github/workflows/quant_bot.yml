@@ -2,13 +2,23 @@ name: Quant Bot Diario
 
 on:
   schedule:
-    # 14:30 UTC = 9:30 AM Nueva York (EST, horario de invierno)
-    # 13:30 UTC = 9:30 AM Nueva York (EDT, horario de verano)
-    # Para cambiar el horario: https://crontab.guru
-    # APERTURA 8:45 AM NY (EDT/verano = 12:45 UTC, EST/invierno = 13:45 UTC)
-    - cron: '45 13 * * 1-5'
-    # CIERRE 3:55 PM NY (EDT/verano = 19:55 UTC, EST/invierno = 20:55 UTC)
-    - cron: '55 20 * * 1-5'
+    # GitHub Actions free tier tiene un retraso tipico de 30-45 minutos.
+    # Los crons estan configurados 45 min antes del objetivo para compensarlo.
+    #
+    # HORARIO ACTIVO: EDT (verano, mar-nov) — NY = UTC-4
+    #
+    # APERTURA — objetivo: 8:45 AM NY
+    #   EDT verano  (mar-nov): 12:00 UTC + ~45min = 12:45 UTC = 8:45 AM NY  ← ACTIVO
+    #   EST invierno (nov-mar): 13:00 UTC + ~45min = 13:45 UTC = 8:45 AM NY  (cambiar en nov)
+    - cron: '00 12 * * 1-5'
+
+    # CIERRE — objetivo: 3:55 PM NY
+    #   EDT verano  (mar-nov): 19:10 UTC + ~45min = 19:55 UTC = 3:55 PM NY  ← ACTIVO
+    #   EST invierno (nov-mar): 20:10 UTC + ~45min = 20:55 UTC = 3:55 PM NY  (cambiar en nov)
+    - cron: '10 19 * * 1-5'
+
+    # Para verificar o ajustar horarios: https://crontab.guru
+    # Cuando vuelva EST en noviembre: cambiar 12->13 y 19->20
 
   # Ejecucion manual -> siempre corre en MODO CIERRE (escaner completo)
   workflow_dispatch:
@@ -58,4 +68,8 @@ jobs:
       - name: Guardar posiciones.json
         run: |
           git config user.name  'Quant Bot'
-         
+          git config user.email 'bot@quant.local'
+          git add posiciones.json chandelier_prev.json || true
+          git diff --staged --quiet || git commit -m 'Auto: posiciones y chandelier actualizados'
+          git push
+
