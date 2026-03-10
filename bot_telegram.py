@@ -58,6 +58,7 @@ def ejecutar_apertura():
             continue
 
     regimen, contexto = detectar_regimen()
+    regimen_txt = regimen.replace("_", " ")   # evita error Markdown en Telegram
     chandelier_previo = cargar_chandelier_previo()
     chandelier_hoy    = {}
     alertas_apertura  = []
@@ -118,7 +119,7 @@ def ejecutar_apertura():
 
     sep = "-" * 38
     encabezado = ("APERTURA DE MERCADO - Quant Bot\n"
-        + "Regimen: " + regimen + "\n"
+        + "Regimen: " + regimen_txt + "\n"
         + "SPY $" + str(contexto.get("SPY","N/A")) + " | VIX " + str(contexto.get("VIX","N/A")) + "\n"
         + sep + "\nEstado de tu cartera:\n" + "\n".join(resumen_cartera) + "\n" + sep + "\n")
     mensaje = encabezado + ("\n".join(alertas_apertura) if alertas_apertura else "Sin gaps criticos. Cartera en orden.")
@@ -132,6 +133,7 @@ def ejecutar_cierre():
     print("MODO CIERRE - Escaner completo...")
     datos = descargar_datos_globales(periodo="3y")
     regimen, contexto = detectar_regimen()
+    regimen_txt = regimen.replace("_", " ")   # evita error Markdown en Telegram
     print(contexto["emoji"] + " Regimen: " + regimen)
     print("   " + contexto["descripcion"])
     print("   Accion: " + contexto["accion"])
@@ -149,8 +151,8 @@ def ejecutar_cierre():
             if msg:
                 alertas.append(msg)
     sep = "-" * 38
-    encabezado = ("CIERRE DE MERCADO - Quant Bot v2.1\n"
-        + contexto["emoji"] + " Regimen: " + regimen + "\n"
+    encabezado = ("CIERRE DE MERCADO - Quant Bot v2.2\n"
+        + contexto["emoji"] + " Regimen: " + regimen_txt + "\n"
         + "SPY $" + str(contexto.get("SPY","N/A"))
         + " | SMA50 $" + str(contexto.get("SPY_SMA50","N/A"))
         + " | VIX " + str(contexto.get("VIX","N/A")) + "\n"
