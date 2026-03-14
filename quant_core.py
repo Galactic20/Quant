@@ -114,7 +114,7 @@ PARAMETROS["RIESGO_USD_BASE"] = (
 # ======================================================================
 SECTORES = {
     'QQQ': 'Índices (ETF)', 'VTI': 'Índices (ETF)', 'IEF': 'Bonos',
-    'GLD': 'Oro/Refugio', 'BTC-USD': 'Crypto', 'ETH-USD': 'Crypto',
+    'BTC-USD': 'Crypto', 'ETH-USD': 'Crypto',
     'AAPL': 'Big Tech', 'MSFT': 'Big Tech', 'META': 'Big Tech',
     'GOOG': 'Big Tech', 'GOOGL': 'Big Tech', 'AMZN': 'Big Tech',
     'NVDA': 'Semiconductores', 'AMD': 'Semiconductores', 'TSM': 'Semiconductores',
@@ -124,21 +124,25 @@ SECTORES = {
     'MCHP': 'Semiconductores', 'QRVO': 'Semiconductores', 'TER': 'Semiconductores',
     'CRM': 'Software/SaaS', 'SNOW': 'Software/SaaS', 'ADBE': 'Software/SaaS',
     'ORCL': 'Software/SaaS', 'INTU': 'Software', 'ACN': 'Servicios IT',
-    'CSCO': 'Networking', 'NTAP': 'Almacenamiento',
     'SNDK': 'Hardware', 'DELL': 'Hardware', 'HPQ': 'Hardware', 'KD': 'Tech',
     'MELI': 'E-commerce', 'SHOP': 'E-commerce', 'Etsy': 'E-commerce',
     'BABA': 'China Tech', 'UBER': 'Movilidad',
     'NET': 'Ciberseguridad', 'PANW': 'Ciberseguridad',
+    'CRWD': 'Ciberseguridad',  # 1 señal WR100% — principalmente alertas BREAKOUT
     'NFLX': 'Streaming', 'DIS': 'Medios', 'CMCSA': 'Telecom/Media',
     'TSLA': 'Automotriz/Tech', 'BA': 'Aeroespacial', 'LUV': 'Aerolíneas',
+    'LMT': 'Defensa',   # 2 señales WR50% — principalmente BREAKOUT (conflicto activo)
+    'RTX': 'Defensa',   # 2 señales WR100% Sharpe1.13 — mejor candidato del grupo
     'UPS': 'Logística',
     'JPM': 'Finanzas', 'MA': 'Finanzas', 'V': 'Finanzas',
     'BAC': 'Finanzas', 'WFC': 'Finanzas', 'C': 'Finanzas',
     'GS': 'Finanzas', 'MS': 'Finanzas', 'AIG': 'Finanzas', 'CME': 'Finanzas',
+    'AXP': 'Finanzas',  # 0 señales COMPRA — muy estable, pocas caídas a RSI<40
     'JNJ': 'Salud', 'UNH': 'Salud', 'PFE': 'Salud', 'MRK': 'Salud',
-    'LLY': 'Salud', 'ABT': 'Salud', 'BMY': 'Salud', 'AMGN': 'Biotech',
+    'LLY': 'Salud', 'ABT': 'Salud', 'BMY': 'Salud',
+    'AMGN': 'Biotech', 'GILD': 'Biotech',  # 2 señales WR0% — monitoreo preventivo
     'CVX': 'Energía', 'OXY': 'Energía', 'XOM': 'Energía', 'COP': 'Energía',
-    'XLE': 'Energía',              # ETF macro de seguimiento energía (nuevo)
+    'XLE': 'Energía',
     'SLB': 'Servicios petroleros', 'HAL': 'Servicios petroleros',
     'PSX': 'Refinación', 'VST': 'Energía', 'CEG': 'Energía',
     'ENPH': 'Energía', 'GUSH': 'Energía (Apal.)', 'CCJ': 'Minería-Uranio',
@@ -149,10 +153,22 @@ SECTORES = {
     'HD': 'Consumo cíclico', 'NKE': 'Consumo cíclico', 'LOW': 'Retail',
     'SBUX': 'Restaurantes', 'MCD': 'Restaurantes', 'GIL': 'Consumo cíclico',
     'KO': 'Consumo defensivo', 'PEP': 'Consumo defensivo',
+    'CL': 'Consumo defensivo',   # 0 señales históricas — muy estable, beta 0.3
     'WMT': 'Retail defensivo', 'PG': 'Consumo defensivo',
-    'COST': 'Retail defensivo', 'MO': 'Tabaco', 'ABEV': 'Consumo defensivo',
+    'COST': 'Retail defensivo',
+    'TGT': 'Retail defensivo',   # 1 señal WR100% — monitoreo BREAKOUT y COMPRA rara
+    'MO': 'Tabaco',
+    'PM': 'Tabaco',              # 1 señal WR100% — Philip Morris Intl, sin litigios US
+    'ABEV': 'Consumo defensivo',
+    'GLD': 'Oro/Refugio',
+    'SLV': 'Oro/Refugio',        # 0 señales COMPRA — cobertura inflación energética
     'PLD': 'REIT Industrial', 'AMT': 'REIT Telecom',
-    'EQIX': 'REIT Data Centers', 'SPG': 'REIT Retail', 'GRBK': 'Inmobiliario',
+    'EQIX': 'REIT Data Centers', 'SPG': 'REIT Retail',
+    'GRBK': 'Inmobiliario',
+    'DHI': 'Inmobiliario',       # 2 señales WR0% — mayor constructor EEUU, monitoreo
+    'CSCO': 'Networking',
+    'ANET': 'Networking',        # 1 señal WR100% — líder data centers, BREAKOUT
+    'NTAP': 'Almacenamiento',
 }
 
 # ETFs representativos por sector para el filtro de fuerza relativa
@@ -168,6 +184,7 @@ SECTOR_ETFS = {
     'Industriales':       'XLI',
     'Utilities':          'XLU',
     'Inmobiliario':       'IYR',
+    'Defensa':            'ITA',   # iShares U.S. Aerospace & Defense ETF
     'Crypto':             'QQQ',   # Proxy macro (no hay ETF cripto universal fiable)
     'Índices (ETF)':      'SPY',
     'Bonos':              'AGG',
