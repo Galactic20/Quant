@@ -137,7 +137,7 @@ SECTORES = {
     'CRM': 'Software/SaaS', 'SNOW': 'Software/SaaS', 'ADBE': 'Software/SaaS',
     'ORCL': 'Software/SaaS', 'INTU': 'Software', 'ACN': 'Servicios IT',
     'SNDK': 'Hardware', 'DELL': 'Hardware', 'HPQ': 'Hardware', 'KD': 'Tech',
-    'MELI': 'E-commerce', 'SHOP': 'E-commerce', 'Etsy': 'E-commerce',
+    'MELI': 'E-commerce', 'SHOP': 'E-commerce', 'ETSY': 'E-commerce',
     'BABA': 'China Tech', 'UBER': 'Movilidad',
     'NET': 'Ciberseguridad', 'PANW': 'Ciberseguridad',
     'CRWD': 'Ciberseguridad',  # 1 señal WR100% — principalmente alertas BREAKOUT
@@ -209,25 +209,75 @@ SECTOR_ETFS = {
 # ======================================================================
 POSICIONES_FILE = "posiciones.json"
 
-def cargar_posiciones() -> dict:
+# posiciones.json acepta dos formatos por ticker (se pueden mezclar):
+#   Simple    : "PLD": 2.0
+#   Detallado : "PLD": {"unidades": 2, "precio_entrada": 125.4,
+#                       "stop_loss": 118.2, "take_profit": 141.0}
+# Con el formato detallado el bot reporta PnL y vigila el SL/TP fijos.
+
+def _leer_posiciones_raw() -> dict:
     try:
         with open(POSICIONES_FILE, 'r') as f:
-            return json.load(f)
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
+
+def _num(valor) -> float | None:
+    try:
+        v = float(valor)
+        return v if math.isfinite(v) else None
+    except (TypeError, ValueError):
+        return None
+
+def cargar_posiciones_detalle() -> dict:
+    """
+    Devuelve {ticker: {"unidades", "precio_entrada", "stop_loss", "take_profit"}}
+    normalizando ambos formatos. Ignora entradas con unidades <= 0.
+    """
+    detalle = {}
+    for ticker, valor in _leer_posiciones_raw().items():
+        if isinstance(valor, dict):
+            info = {
+                "unidades":       _num(valor.get("unidades")) or 0,
+                "precio_entrada": _num(valor.get("precio_entrada")),
+                "stop_loss":      _num(valor.get("stop_loss")),
+                "take_profit":    _num(valor.get("take_profit")),
+            }
+        else:
+            info = {"unidades": _num(valor) or 0, "precio_entrada": None,
+                    "stop_loss": None, "take_profit": None}
+        if info["unidades"] > 0:
+            detalle[ticker.strip().upper()] = info
+    return detalle
+
+def cargar_posiciones() -> dict:
+    """Devuelve {ticker: unidades} (compatible con el formato original)."""
+    return {t: d["unidades"] for t, d in cargar_posiciones_detalle().items()}
 
 def guardar_posiciones(posiciones: dict):
     with open(POSICIONES_FILE, 'w') as f:
         json.dump(posiciones, f, indent=4)
     print(f"✅ posiciones.json actualizado ({len(posiciones)} posiciones).")
 
-def abrir_posicion(ticker: str, cantidad: float):
-    pos = cargar_posiciones()
-    pos[ticker] = cantidad
+def abrir_posicion(ticker: str, cantidad: float,
+                   precio_entrada: float = None,
+                   stop_loss: float = None,
+                   take_profit: float = None):
+    pos = _leer_posiciones_raw()
+    if precio_entrada is None and stop_loss is None and take_profit is None:
+        pos[ticker] = cantidad
+    else:
+        pos[ticker] = {
+            "unidades":       cantidad,
+            "precio_entrada": precio_entrada,
+            "stop_loss":      stop_loss,
+            "take_profit":    take_profit,
+        }
     guardar_posiciones(pos)
 
 def cerrar_posicion(ticker: str):
-    pos = cargar_posiciones()
+    pos = _leer_posiciones_raw()
     if ticker in pos:
         del pos[ticker]
         guardar_posiciones(pos)
@@ -361,12 +411,14 @@ def detectar_regimen(p: dict = PARAMETROS) -> tuple[str, dict]:
         return regimen, contexto
 
     except Exception as e:
+        # Sin datos de mercado no se puede confirmar la tendencia: se usa
+        # RECUPERACION (umbrales estrictos) en vez de asumir mercado alcista.
         print(f"⚠️ Error detectando régimen: {e}")
-        return "TENDENCIA_ALCISTA", {
-            "regimen":     "TENDENCIA_ALCISTA",
+        return "RECUPERACION", {
+            "regimen":     "RECUPERACION",
             "descripcion": "Desconocido (error de datos)",
             "emoji":       "⚠️",
-            "accion":      "Usar parámetros estándar.",
+            "accion":      "Datos de mercado no disponibles: solo señales estrictas.",
             "SPY":         "N/A",
             "SPY_SMA200":  "N/A",
             "SPY_SMA50":   "N/A",
@@ -702,12 +754,25 @@ def es_senal_breakout(df: pd.DataFrame, p: dict = PARAMETROS) -> bool:
 #     Integra todas las mejoras: régimen, RS, calidad, correlación.
 # ======================================================================
 
+def _pnl(precio: float, info: dict) -> dict:
+    """PnL de una posición si se conoce el precio de entrada."""
+    entrada = info.get("precio_entrada") if info else None
+    if not entrada:
+        return {}
+    unidades = info.get("unidades", 0)
+    return {
+        "precio_entrada": round(entrada, 2),
+        "pnl_pct":        round((precio / entrada - 1) * 100, 2),
+        "pnl_usd":        round((precio - entrada) * unidades, 2),
+    }
+
 def motor_quant(ticker: str,
                 df: pd.DataFrame,
                 regimen: str,
                 datos_globales: dict = None,
                 win_rate_hist: float = None,
-                p: dict = PARAMETROS) -> dict | None:
+                p: dict = PARAMETROS,
+                posiciones: dict = None) -> dict | None:
     """
     Analiza un ticker y devuelve un dict con señal completa o None.
 
@@ -718,6 +783,8 @@ def motor_quant(ticker: str,
         datos_globales: dict completo {ticker: df} para filtro RS
         win_rate_hist : Win rate histórico del backtest (opcional)
         p             : Parámetros de la estrategia
+        posiciones    : Resultado de cargar_posiciones_detalle() (si es None
+                        se lee posiciones.json)
     """
     try:
         if df.empty or len(df) < p["SMA_PERIODO"]:
@@ -732,64 +799,52 @@ def motor_quant(ticker: str,
         chandelier = float(last['Chandelier_Exit'])
         sector     = SECTORES.get(ticker, "Otros")
 
-        posiciones = cargar_posiciones()
-        tengo      = posiciones.get(ticker, 0)
+        if posiciones is None:
+            posiciones = cargar_posiciones_detalle()
+        info       = posiciones.get(ticker)
+        tengo      = info["unidades"] if info else 0
         en_cartera = tengo > 0
 
         # ── Señales de SALIDA (si ya tienes el activo) ──
         if en_cartera:
-            if es_senal_venta_urgente(last):
-                return {
-                    "tipo":    "VENTA_URGENTE",
-                    "ticker":  ticker, "sector": sector,
-                    "precio":  round(precio, 2),
-                    "rsi":     round(rsi,    1),
-                    "rv":      round(rv,     2),
-                    "chandelier": round(chandelier, 2),
-                    "motivo":  f"Rompió SMA 200 (${round(sma200,2)})",
-                    "accion":  "🚨 VENDER TODO",
-                    "unidades_en_cartera": tengo,
-                }
-            if es_senal_stop_dinamico(last, p):
-                margen = round(float(last['ATR']) * p.get("MARGEN_CHANDELIER", 0.10), 2)
-                return {
-                    "tipo":    "STOP_DINAMICO",
-                    "ticker":  ticker, "sector": sector,
-                    "precio":  round(precio, 2),
-                    "rsi":     round(rsi,    1),
-                    "rv":      round(rv,     2),
-                    "chandelier": round(chandelier, 2),
-                    "motivo":  f"Bajo Chandelier Exit (${round(chandelier,2)}) con margen ${margen}",
-                    "accion":  "💰 VENTA POR STOP",
-                    "unidades_en_cartera": tengo,
-                }
-            if es_senal_sobrecompra(last, p):
-                return {
-                    "tipo":    "SOBRECOMPRA",
-                    "ticker":  ticker, "sector": sector,
-                    "precio":  round(precio, 2),
-                    "rsi":     round(rsi,    1),
-                    "rv":      round(rv,     2),
-                    "chandelier": round(chandelier, 2),
-                    "motivo":  f"RSI ({round(rsi,1)}) sobrecomprado",
-                    "accion":  f"⚠️ AJUSTAR STOP a ${round(chandelier,2)}",
-                    "unidades_en_cartera": tengo,
-                }
-            return {
-                "tipo":    "MANTENER",
+            base = {
                 "ticker":  ticker, "sector": sector,
                 "precio":  round(precio, 2),
                 "rsi":     round(rsi,    1),
                 "rv":      round(rv,     2),
                 "chandelier": round(chandelier, 2),
-                "accion":  "💎 MANTENER",
                 "unidades_en_cartera": tengo,
+                **_pnl(precio, info),
             }
+            sl = info.get("stop_loss")
+            tp = info.get("take_profit")
+            if sl and precio <= sl:
+                return {**base, "tipo": "STOP_LOSS",
+                        "motivo": f"Tocó el Stop Loss fijo (${round(sl,2)})",
+                        "accion": "🛑 VENDER (stop loss)"}
+            if es_senal_venta_urgente(last):
+                return {**base, "tipo": "VENTA_URGENTE",
+                        "motivo": f"Rompió SMA 200 (${round(sma200,2)})",
+                        "accion": "🚨 VENDER TODO"}
+            if es_senal_stop_dinamico(last, p):
+                margen = round(atr * p.get("MARGEN_CHANDELIER", 0.10), 2)
+                return {**base, "tipo": "STOP_DINAMICO",
+                        "motivo": f"Bajo Chandelier Exit (${round(chandelier,2)}) con margen ${margen}",
+                        "accion": "💰 VENTA POR STOP"}
+            if tp and precio >= tp:
+                return {**base, "tipo": "TAKE_PROFIT",
+                        "motivo": f"Alcanzó el Take Profit (${round(tp,2)})",
+                        "accion": f"🎯 TOMAR GANANCIAS o subir stop a ${round(chandelier,2)}"}
+            if es_senal_sobrecompra(last, p):
+                return {**base, "tipo": "SOBRECOMPRA",
+                        "motivo": f"RSI ({round(rsi,1)}) sobrecomprado",
+                        "accion": f"⚠️ AJUSTAR STOP a ${round(chandelier,2)}"}
+            return {**base, "tipo": "MANTENER", "accion": "💎 MANTENER"}
 
-        # ── Señal de BREAKOUT (informativa, solo si NO está en cartera) ──
+        # ── Señal de BREAKOUT (informativa; aquí el activo NO está en cartera) ──
         # Se detecta antes de la señal de compra estándar porque son mutuamente
         # excluyentes: un activo en breakout tiene RSI alto, nunca generaría COMPRA.
-        if not en_cartera and es_senal_breakout(df, p):
+        if es_senal_breakout(df, p):
             return {
                 "tipo":    "BREAKOUT",
                 "ticker":  ticker, "sector": sector,
@@ -875,6 +930,8 @@ def descargar_datos_globales(tickers: list = None,
     """
     if tickers is None:
         tickers = list(SECTORES.keys())
+    # Las posiciones abiertas siempre se descargan (aunque no estén en SECTORES)
+    tickers = list(tickers) + [t for t in cargar_posiciones() if t not in tickers]
 
     # Incluir ETFs sectoriales para filtro de fuerza relativa
     etfs_extra = [e for e in SECTOR_ETFS.values()
@@ -930,8 +987,14 @@ def escanear_universo(datos_globales: dict = None,
           f"SMA50: ${contexto.get('SPY_SMA50','N/A')} | "
           f"VIX: {contexto.get('VIX','N/A')}\n")
 
-    # Paso 2: Universo élite
+    # Paso 2: Universo élite + posiciones abiertas (siempre se vigilan,
+    # aunque hayan salido del élite, para no perder alertas de salida)
+    posiciones = cargar_posiciones_detalle()
     universo = obtener_universo_elite(db_historica, p)
+    universo = list(universo) + [t for t in posiciones if t not in universo]
+    faltantes = [t for t in posiciones if t not in datos_globales]
+    if faltantes:
+        print(f"⚠️  Sin datos para posiciones abiertas: {', '.join(faltantes)}")
 
     # Paso 3: Win rates históricos
     win_rates = {}
@@ -954,7 +1017,7 @@ def escanear_universo(datos_globales: dict = None,
             continue
         wr     = win_rates.get(ticker)
         señal  = motor_quant(ticker, datos_globales[ticker],
-                              regimen, datos_globales, wr, p)
+                              regimen, datos_globales, wr, p, posiciones)
         if señal:
             señales_raw.append(señal)
 
@@ -963,20 +1026,20 @@ def escanear_universo(datos_globales: dict = None,
         return pd.DataFrame()
 
     # Paso 5: Filtro de correlación (solo para compras)
-    posiciones = cargar_posiciones()
     señales_filtradas = filtrar_por_correlacion(señales_raw, posiciones, p)
 
     # Ordenar: COMPRA ALTA > COMPRA NORMAL > ventas > MANTENER
     orden = {
-        "COMPRA_ALTA":    0, "COMPRA":          1,
-        "VENTA_URGENTE":  2, "STOP_DINAMICO":   3,
-        "SOBRECOMPRA":    4, "BREAKOUT":         5, "MANTENER": 6,
+        "STOP_LOSS":      0, "VENTA_URGENTE":   1, "STOP_DINAMICO":  2,
+        "COMPRA_ALTA":    3, "COMPRA_NORMAL":   4, "COMPRA_DEBIL":   5,
+        "TAKE_PROFIT":    6, "SOBRECOMPRA":     7, "BREAKOUT":       8,
+        "MANTENER":       9,
     }
     def sort_key(s):
         tipo = s.get("tipo", "")
         cal  = s.get("calidad_senal", "")
         key  = f"{tipo}_{cal}" if tipo == "COMPRA" else tipo
-        return (orden.get(key, orden.get(tipo, 9)),
+        return (orden.get(key, 10),
                 -(s.get("win_rate_raw") or 0))
 
     señales_filtradas.sort(key=sort_key)
@@ -988,6 +1051,14 @@ def escanear_universo(datos_globales: dict = None,
 # ======================================================================
 
 EMOJIS_CALIDAD = {"ALTA": "💎", "NORMAL": "🛒", "DEBIL": "👀"}
+
+def formatear_pnl(señal: dict) -> str:
+    """'PnL: +3.2% ($12.5)' si se conoce el precio de entrada, si no ''."""
+    pct = señal.get("pnl_pct")
+    if pct is None or (isinstance(pct, float) and math.isnan(pct)):
+        return ""
+    usd = señal.get("pnl_usd", 0)
+    return f"PnL: `{pct:+.2f}%` (${usd:+.2f}) desde ${señal.get('precio_entrada')}"
 
 def formatear_alerta(señal: dict) -> str | None:
     """Convierte un dict de señal en mensaje Markdown para Telegram."""
@@ -1011,7 +1082,7 @@ def formatear_alerta(señal: dict) -> str | None:
             f"Régimen: `{reg}` | RSI: `{rsi}` | Mano Fuerte: `{rv}x`\n"
             f"Fuerza vs sector: `{rs}`\n"
             f"{'─'*35}\n"
-            f"📌 Comprar: `{señal['unidades']} acciones` — ${señal['inversion']}\n"
+            f"📌 Comprar: `{int(señal['unidades'])} acciones` — ${señal['inversion']}\n"
             f"🛑 Stop Loss: `${señal['stop_loss']}`\n"
             f"✅ Take Profit: `${señal['take_profit']}`\n"
             f"📊 R:R: `{señal['rr_ratio']}:1` | "
@@ -1019,28 +1090,49 @@ def formatear_alerta(señal: dict) -> str | None:
             f"🔬 Win Rate Hist: `{wr}` | Chandelier: `${ch}`"
         )
 
+    pnl = formatear_pnl(señal)
+    pnl = f"\n{pnl}" if pnl else ""
+
+    if señal["tipo"] == "STOP_LOSS":
+        return (
+            f"🛑 *STOP LOSS*: `{t}`\n"
+            f"Precio: `${p}` | RSI: `{rsi}`{pnl}\n"
+            f"{'─'*35}\n"
+            f"⚠️ {señal['motivo']}\n"
+            f"Tienes `{float(señal['unidades_en_cartera']):g}` acciones. Ejecuta la venta."
+        )
+
+    if señal["tipo"] == "TAKE_PROFIT":
+        return (
+            f"🎯 *TAKE PROFIT*: `{t}`\n"
+            f"Precio: `${p}` | RSI: `{rsi}`{pnl}\n"
+            f"{'─'*35}\n"
+            f"✅ {señal['motivo']}\n"
+            f"📌 Toma ganancias o sube el stop a `${ch}` (Chandelier Exit)."
+        )
+
     if señal["tipo"] == "VENTA_URGENTE":
         return (
             f"🚨 *VENTA URGENTE*: `{t}`\n"
-            f"Precio: `${p}` | RSI: `{rsi}`\n"
+            f"Precio: `${p}` | RSI: `{rsi}`{pnl}\n"
             f"{'─'*35}\n"
             f"⚠️ {señal['motivo']}\n"
-            f"Tienes `{señal['unidades_en_cartera']}` acciones. Vende ahora."
+            f"Tienes `{float(señal['unidades_en_cartera']):g}` acciones. Vende ahora."
         )
 
     if señal["tipo"] == "STOP_DINAMICO":
         return (
             f"💰 *STOP DINÁMICO*: `{t}`\n"
-            f"Precio: `${p}` | Chandelier: `${ch}`\n"
+            f"Precio: `${p}` | Chandelier: `${ch}`{pnl}\n"
             f"{'─'*35}\n"
             f"⚠️ {señal['motivo']}\n"
-            f"Tienes `{señal['unidades_en_cartera']}` acciones. Ejecuta la venta."
+            f"Tienes `{float(señal['unidades_en_cartera']):g}` acciones. Ejecuta la venta."
         )
 
     if señal["tipo"] == "SOBRECOMPRA":
         return (
             f"⚠️ *SOBRECOMPRA*: `{t}`\n"
-            f"Precio: `${p}` | RSI: `{rsi}`\n"
+            f"Precio: `${p}` | RSI: `{rsi}`{pnl}\n"
             f"{'─'*35}\n"
             f"{señal['motivo']}\n"
             f"📌 Ajusta Stop a `${ch}` (Chandelier Exit)."
@@ -1054,7 +1146,8 @@ def formatear_alerta(señal: dict) -> str | None:
             f"📈 {señal['motivo']}\n"
             f"SMA200: `${señal['sma200']}` — tendencia alcista confirmada\n"
             f"⏳ *No comprar ahora* — RSI elevado, riesgo de entrada en pico.\n"
-            f"📌 Esperar pullback con RSI < 40 y RV > 1.5 para señal de COMPRA."
+            f"📌 Esperar pullback con RSI < {PARAMETROS['RSI_ENTRADA']} "
+            f"y RV > {PARAMETROS['RV_MIN']} para señal de COMPRA."
         )
     return None
 
@@ -1131,7 +1224,8 @@ class BitacoraTrades:
     def registrar_compra(self, ticker: str, precio: float,
                          unidades: float, stop_loss: float,
                          calidad: str = "NORMAL",
-                         motivo: str = "Mano Fuerte"):
+                         motivo: str = "Mano Fuerte",
+                         take_profit: float = None):
         op = {
             "id":             len(self.operaciones) + 1,
             "fecha_entrada":  datetime.now().strftime("%Y-%m-%d"),
@@ -1139,6 +1233,7 @@ class BitacoraTrades:
             "precio_entrada": precio,
             "unidades":       unidades,
             "stop_loss":      stop_loss,
+            "take_profit":    take_profit,
             "calidad":        calidad,
             "motivo":         motivo,
             "estado":         "ABIERTA",
@@ -1151,7 +1246,7 @@ class BitacoraTrades:
         }
         self.operaciones.append(op)
         self._guardar()
-        abrir_posicion(ticker, unidades)
+        abrir_posicion(ticker, unidades, precio, stop_loss, take_profit)
         print(f"✅ Compra [{calidad}]: {unidades}×{ticker} @ ${precio}. "
               f"Revisión: {op['fecha_revision']}.")
 
@@ -1161,6 +1256,10 @@ class BitacoraTrades:
                 viejo = op['stop_loss']
                 op['stop_loss'] = nuevo_stop
                 self._guardar()
+                pos = _leer_posiciones_raw()
+                if isinstance(pos.get(op['ticker']), dict):
+                    pos[op['ticker']]['stop_loss'] = nuevo_stop
+                    guardar_posiciones(pos)
                 print(f"📌 Stop {op['ticker']} (ID {id_op}): "
                       f"${viejo} → ${nuevo_stop}")
                 return
