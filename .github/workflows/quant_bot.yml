@@ -5,23 +5,35 @@ on:
     # GitHub Actions free tier tiene un retraso tipico de 30-45 minutos.
     # Los crons estan configurados 45 min antes del objetivo para compensarlo.
     #
-    # HORARIO ACTIVO: EDT (verano, mar-nov) — NY = UTC-4
+    # Hay crons para AMBOS horarios de Nueva York. bot_telegram.py detecta si
+    # hoy rige EDT o EST y omite el cron que no corresponde, asi que ya no hay
+    # que editar este archivo en marzo/noviembre. Tambien omite fines de semana
+    # y feriados de NYSE.
     #
     # APERTURA — objetivo: 8:45 AM NY
-    #   EDT verano  (mar-nov): 12:00 UTC + ~45min = 12:45 UTC = 8:45 AM NY  ← ACTIVO
-    #   EST invierno (nov-mar): 13:00 UTC + ~45min = 13:45 UTC = 8:45 AM NY  (cambiar en nov)
-    - cron: '00 12 * * 1-5'
+    - cron: '0 12 * * 1-5'   # EDT verano  (mar-nov): 12:00 UTC + ~45min
+    - cron: '0 13 * * 1-5'   # EST invierno (nov-mar): 13:00 UTC + ~45min
 
     # CIERRE — objetivo: 3:55 PM NY
-    #   EDT verano  (mar-nov): 19:10 UTC + ~45min = 19:55 UTC = 3:55 PM NY  ← ACTIVO
-    #   EST invierno (nov-mar): 20:10 UTC + ~45min = 20:55 UTC = 3:55 PM NY  (cambiar en nov)
-    - cron: '10 19 * * 1-5'
+    - cron: '10 19 * * 1-5'  # EDT verano  (mar-nov): 19:10 UTC + ~45min
+    - cron: '10 20 * * 1-5'  # EST invierno (nov-mar): 20:10 UTC + ~45min
 
     # Para verificar o ajustar horarios: https://crontab.guru
-    # Cuando vuelva EST en noviembre: cambiar 12->13 y 19->20
+    # Si cambias las horas, actualiza tambien CRONES en bot_telegram.py
 
-  # Ejecucion manual -> siempre corre en MODO CIERRE (escaner completo)
+  # Ejecucion manual desde la pestaña Actions
   workflow_dispatch:
+    inputs:
+      modo:
+        description: 'Modo de ejecucion'
+        type: choice
+        options: [cierre, apertura]
+        default: cierre
+
+# Evita dos ejecuciones simultaneas que compitan al guardar posiciones.json
+concurrency:
+  group: quant-bot
+  cancel-in-progress: false
 
 jobs:
   ejecutar-bot:
@@ -35,41 +47,43 @@ jobs:
       - name: Checkout del repositorio
         uses: actions/checkout@v4
 
-      # 2. Instala Python 3.11
+      # 2. Instala Python 3.11 con cache de pip (se invalida al cambiar requirements.txt)
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
-      # 3. Cache de pip para acelerar ejecuciones futuras
-      - name: Cache de pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: quant-pip-v1
-
-      # 4. Instala las librerias de Python necesarias
+      # 3. Instala las librerias de Python necesarias
       - name: Instalar dependencias
         run: |
           pip install --upgrade pip
-          pip install yfinance pandas numpy requests tabulate
+          pip install -r requirements.txt
 
-      # 5. Ejecuta el bot usando los secretos de Telegram
+      # 4. Ejecuta el bot usando los secretos de Telegram
       #    Configurar en: GitHub repo > Settings > Secrets > Actions
       #    Crear dos secretos: TELEGRAM_TOKEN y TELEGRAM_CHAT_ID
       - name: Ejecutar Quant Bot
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CRON_PROGRAMADO: ${{ github.event.schedule }}
+          MODO_MANUAL: ${{ github.event.inputs.modo }}
         run: python bot_telegram.py
 
-      # 6. Si posiciones.json cambio (nueva compra o cierre),
-      #    lo guarda de vuelta al repositorio automaticamente
+      # 5. Si posiciones.json o chandelier_prev.json cambiaron,
+      #    los guarda de vuelta al repositorio automaticamente
       - name: Guardar posiciones.json
         run: |
           git config user.name  'Quant Bot'
           git config user.email 'bot@quant.local'
           git add posiciones.json chandelier_prev.json || true
-          git diff --staged --quiet || git commit -m 'Auto: posiciones y chandelier actualizados'
+          if git diff --staged --quiet; then
+            echo "Sin cambios que guardar."
+            exit 0
+          fi
+          git commit -m 'Auto: posiciones y chandelier actualizados'
+          # Si editaste posiciones.json mientras corria el bot, integra tu cambio
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push
-
