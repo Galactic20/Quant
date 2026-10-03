@@ -7,6 +7,7 @@ ESTRATEGIAS ALTERNATIVAS CON ETFs — comparación contra el bot Quant y SPY
          si no, IEF (bonos del Tesoro 7-10 años).
   B    : Momentum. Al cierre de cada mes, el ETF con mejor promedio de
          retorno a 3, 6 y 12 meses entre SPY, QQQ, EFA, GLD e IEF.
+  50/50: 50% SPY fijo + 50% en la elección de B (la cartera del bot).
 
 Los parámetros son los clásicos de la literatura y NO se optimizan con
 estos datos, para que el resultado no esté sobreajustado.
@@ -51,16 +52,42 @@ def regla_tendencia(riesgo: str = "SPY", refugio: str = "IEF", sma: int = 200):
         return {riesgo: 1.0} if serie.iloc[-1] > serie.iloc[-sma:].mean() else {refugio: 1.0}
     return regla
 
-def regla_momentum(universo: list = None, ventanas=(63, 126, 252), top: int = 1):
+VENTANAS_MOMENTUM = (63, 126, 252)   # ~3, 6 y 12 meses hábiles
+
+def puntajes_momentum(hist: pd.DataFrame, universo: list = None,
+                      ventanas=VENTANAS_MOMENTUM) -> dict:
+    """Promedio del retorno a 3, 6 y 12 meses de cada ETF (mayor = más fuerte)."""
+    universo = universo or UNIVERSO_MOMENTUM
+    if len(hist) <= max(ventanas):
+        return {}
+    return {t: float(np.mean([hist[t].iloc[-1] / hist[t].iloc[-1 - v] - 1 for v in ventanas]))
+            for t in universo if t in hist}
+
+def regla_momentum(universo: list = None, ventanas=VENTANAS_MOMENTUM, top: int = 1):
     universo = universo or UNIVERSO_MOMENTUM
     def regla(hist: pd.DataFrame) -> dict:
-        if len(hist) <= max(ventanas):
+        puntaje = puntajes_momentum(hist, universo, ventanas)
+        if not puntaje:
             return {"IEF": 1.0}
-        puntaje = {t: np.mean([hist[t].iloc[-1] / hist[t].iloc[-1 - v] - 1 for v in ventanas])
-                   for t in universo if t in hist}
         elegidos = sorted(puntaje, key=puntaje.get, reverse=True)[:top]
         return {t: 1.0 / len(elegidos) for t in elegidos}
     return regla
+
+
+def regla_mezcla(partes: list):
+    """Combina reglas: partes = [(peso, regla), ...]. Los pesos suman 1."""
+    def regla(hist: pd.DataFrame) -> dict:
+        total: dict = {}
+        for peso, r in partes:
+            for t, w in r(hist).items():
+                total[t] = total.get(t, 0.0) + peso * w
+        return total
+    return regla
+
+def regla_spy_mas_b(peso_spy: float = 0.5):
+    """Cartera del bot: peso_spy en SPY fijo + el resto en la estrategia B."""
+    return regla_mezcla([(peso_spy, regla_comprar_mantener("SPY")),
+                         (1 - peso_spy, regla_momentum())])
 
 
 # ======================================================================
@@ -145,6 +172,7 @@ ESTRATEGIAS = {
     "SPY (comprar y mantener)":  regla_comprar_mantener("SPY"),
     "A · Tendencia SMA200":      regla_tendencia("SPY", "IEF", 200),
     "B · Momentum 5 ETFs":       regla_momentum(),
+    "50% SPY + 50% B":           regla_spy_mas_b(0.5),
 }
 
 def resumen(nombre: str, r: dict) -> dict:

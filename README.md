@@ -1,14 +1,23 @@
 # Quant Bot
 
-Bot de señales para acciones de EE. UU. (operado manualmente en eToro). Corre en
-GitHub Actions y avisa por Telegram.
+Bot de inversión con ETFs (operado manualmente en eToro). Corre en GitHub
+Actions y avisa por Telegram.
+
+**Estrategia actual (v3.0):** cartera modelo **50% SPY + 50% estrategia B**
+(momentum mensual entre SPY, QQQ, EFA, GLD e IEF), con aporte mensual. El
+último día hábil de cada mes el bot envía las órdenes de rebalanceo; los
+viernes, un resumen frente a SPY. El escáner de swing trading anterior sigue
+disponible con `ESTRATEGIA_BOT=quant`.
 
 ## Archivos
 
 | Archivo | Para qué |
 |---|---|
-| `quant_core.py` | Estrategia: parámetros, indicadores, régimen, señales, tamaño de posición. Única fuente de verdad. |
-| `bot_telegram.py` | Bot diario: APERTURA (8:45 NY) vigila posiciones; CIERRE (3:55 NY) busca compras. |
+| `quant_core.py` | Estrategia Quant anterior (swing): parámetros, indicadores, señales. |
+| `bot_telegram.py` | Bot diario. Modo cartera: actúa en el CIERRE (3:55 NY). |
+| `cartera.py` | Cartera modelo 50% SPY + 50% B: aportes, rebalanceo y mensajes. Estado en `datos/cartera_modelo.json`. |
+| `estrategias.py` | Backtest de SPY, A (tendencia), B (momentum) y la mezcla 50/50. |
+| `calendario.py` | Feriados y días hábiles de NYSE. |
 | `backtest.py` | Backtest día a día con las mismas reglas del bot, comparación con SPY y walk-forward. |
 | `notebooks/ultimate_quant_v3.ipynb` | Laboratorio de Colab. Descarga el código de este repo (no tiene copia propia). |
 | `posiciones.json` | Posiciones abiertas que vigila el bot. Formato simple `"PLD": 2` o detallado con `precio_entrada`, `stop_loss`, `take_profit`. |
