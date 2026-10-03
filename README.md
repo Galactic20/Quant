@@ -9,6 +9,11 @@ Actions y avisa por Telegram.
 viernes, un resumen frente a SPY. El escáner de swing trading anterior sigue
 disponible con `ESTRATEGIA_BOT=quant`.
 
+**Satélite fundamental:** cartera virtual aparte ($1,000, 5 acciones) elegida
+con un filtro de calidad + valoración + crecimiento. Revisión trimestral,
+reporte mensual del filtro y resumen semanal frente a SPY. Se desactiva con
+`SATELITE=0`.
+
 ## Archivos
 
 | Archivo | Para qué |
@@ -18,6 +23,8 @@ disponible con `ESTRATEGIA_BOT=quant`.
 | `cartera.py` | Cartera modelo 50% SPY + 50% B: aportes, rebalanceo y mensajes. Estado en `datos/cartera_modelo.json`. |
 | `estrategias.py` | Backtest de SPY, A (tendencia), B (momentum) y la mezcla 50/50. |
 | `calendario.py` | Feriados y días hábiles de NYSE. |
+| `fundamental.py` | Filtro fundamental (datos de yfinance): filtros mínimos y puntaje. `python fundamental.py` muestra el ranking actual. |
+| `satelite.py` | Cartera satélite: compras iniciales, revisión trimestral, reportes. Estado en `datos/satelite_modelo.json`. |
 | `backtest.py` | Backtest día a día con las mismas reglas del bot, comparación con SPY y walk-forward. |
 | `notebooks/ultimate_quant_v3.ipynb` | Laboratorio de Colab. Descarga el código de este repo (no tiene copia propia). |
 | `posiciones.json` | Posiciones abiertas que vigila el bot. Formato simple `"PLD": 2` o detallado con `precio_entrada`, `stop_loss`, `take_profit`. |
