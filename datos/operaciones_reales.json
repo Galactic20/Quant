@@ -1,5 +1,5 @@
 {
-  "_nota": "Operaciones cerradas en eToro. origen: 'bot' = sistema Quant, 'pre_sistema' = posiciones compradas antes del bot. Agrega nuevas operaciones al final de la lista.",
+  "_nota": "Operaciones cerradas en eToro. pnl = G/P que muestra eToro (sin comisiones); comision = USD pagados (negativo = reembolso); pnl_neto = pnl - comision. origen: 'bot' = sistema Quant, 'pre_sistema' = compradas antes del bot, 'sin_confirmar' = falta confirmar si fueron del bot. Agrega nuevas al final.",
   "operaciones": [
     {
       "ticker": "META",
@@ -10,7 +10,10 @@
       "invertido": 50.0,
       "pnl": 2.12,
       "origen": "bot",
-      "motivo": null
+      "motivo": null,
+      "comision": 2.0,
+      "comision_estimada": true,
+      "pnl_neto": 0.12
     },
     {
       "ticker": "QQQ",
@@ -21,7 +24,10 @@
       "invertido": 400.0,
       "pnl": -17.98,
       "origen": "bot",
-      "motivo": null
+      "motivo": "STOP_LOSS",
+      "comision": -0.36,
+      "comision_estimada": false,
+      "pnl_neto": -17.62
     },
     {
       "ticker": "QQQ",
@@ -32,7 +38,10 @@
       "invertido": 400.0,
       "pnl": 8.5,
       "origen": "bot",
-      "motivo": null
+      "motivo": "TAKE_PROFIT",
+      "comision": -0.36,
+      "comision_estimada": false,
+      "pnl_neto": 8.86
     },
     {
       "ticker": "TSM",
@@ -43,7 +52,10 @@
       "invertido": 50.16,
       "pnl": 45.69,
       "origen": "pre_sistema",
-      "motivo": null
+      "motivo": null,
+      "comision": 2.0,
+      "comision_estimada": true,
+      "pnl_neto": 43.69
     },
     {
       "ticker": "TSM",
@@ -54,7 +66,10 @@
       "invertido": 50.0,
       "pnl": 45.84,
       "origen": "pre_sistema",
-      "motivo": null
+      "motivo": null,
+      "comision": 2.0,
+      "comision_estimada": true,
+      "pnl_neto": 43.84
     },
     {
       "ticker": "ON",
@@ -65,7 +80,10 @@
       "invertido": 50.0,
       "pnl": 32.36,
       "origen": "pre_sistema",
-      "motivo": null
+      "motivo": null,
+      "comision": 2.0,
+      "comision_estimada": true,
+      "pnl_neto": 30.36
     },
     {
       "ticker": "GUSH",
@@ -76,7 +94,10 @@
       "invertido": 60.0,
       "pnl": 30.3,
       "origen": "pre_sistema",
-      "motivo": null
+      "motivo": null,
+      "comision": 0.0,
+      "comision_estimada": true,
+      "pnl_neto": 30.3
     },
     {
       "ticker": "IEF",
@@ -87,7 +108,10 @@
       "invertido": 400.0,
       "pnl": 4.91,
       "origen": "bot",
-      "motivo": null
+      "motivo": null,
+      "comision": 0.0,
+      "comision_estimada": true,
+      "pnl_neto": 4.91
     },
     {
       "ticker": "VTI",
@@ -98,7 +122,10 @@
       "invertido": 300.0,
       "pnl": -2.22,
       "origen": "bot",
-      "motivo": null
+      "motivo": "STOP_LOSS",
+      "comision": -0.59,
+      "comision_estimada": false,
+      "pnl_neto": -1.63
     },
     {
       "ticker": "BABA",
@@ -109,7 +136,10 @@
       "invertido": 309.09,
       "pnl": -0.63,
       "origen": "bot",
-      "motivo": null
+      "motivo": null,
+      "comision": 2.0,
+      "comision_estimada": false,
+      "pnl_neto": -2.63
     },
     {
       "ticker": "JPM",
@@ -120,7 +150,10 @@
       "invertido": 379.91,
       "pnl": -1.16,
       "origen": "bot",
-      "motivo": null
+      "motivo": null,
+      "comision": 2.0,
+      "comision_estimada": true,
+      "pnl_neto": -3.16
     },
     {
       "ticker": "BA",
@@ -131,7 +164,10 @@
       "invertido": 227.09,
       "pnl": -1.32,
       "origen": "bot",
-      "motivo": null
+      "motivo": null,
+      "comision": 2.0,
+      "comision_estimada": true,
+      "pnl_neto": -3.32
     },
     {
       "ticker": "BAC",
@@ -142,7 +178,10 @@
       "invertido": 249.7,
       "pnl": -2.85,
       "origen": "bot",
-      "motivo": null
+      "motivo": null,
+      "comision": 2.0,
+      "comision_estimada": true,
+      "pnl_neto": -4.85
     },
     {
       "ticker": "PLD",
@@ -153,7 +192,10 @@
       "invertido": 282.16,
       "pnl": -11.14,
       "origen": "bot",
-      "motivo": "STOP_LOSS"
+      "motivo": "STOP_LOSS",
+      "comision": 2.0,
+      "comision_estimada": true,
+      "pnl_neto": -13.14
     },
     {
       "ticker": "VTI",
@@ -164,7 +206,10 @@
       "invertido": 300.0,
       "pnl": 1.39,
       "origen": "bot",
-      "motivo": "STOP_LOSS"
+      "motivo": "STOP_LOSS",
+      "comision": 0.0,
+      "comision_estimada": false,
+      "pnl_neto": 1.39
     },
     {
       "ticker": "QQQ",
@@ -175,7 +220,10 @@
       "invertido": 511.49,
       "pnl": -10.93,
       "origen": "bot",
-      "motivo": "STOP_LOSS"
+      "motivo": "STOP_LOSS",
+      "comision": 0.0,
+      "comision_estimada": false,
+      "pnl_neto": -10.93
     },
     {
       "ticker": "GOOG",
@@ -186,7 +234,10 @@
       "invertido": 259.46,
       "pnl": -9.37,
       "origen": "bot",
-      "motivo": "STOP_LOSS"
+      "motivo": "STOP_LOSS",
+      "comision": 1.87,
+      "comision_estimada": false,
+      "pnl_neto": -11.24
     },
     {
       "ticker": "AVGO",
@@ -197,7 +248,10 @@
       "invertido": 312.75,
       "pnl": 0.35,
       "origen": "bot",
-      "motivo": null
+      "motivo": null,
+      "comision": 2.0,
+      "comision_estimada": true,
+      "pnl_neto": -1.65
     },
     {
       "ticker": "TSLA",
@@ -208,7 +262,10 @@
       "invertido": 100.0,
       "pnl": -9.6,
       "origen": "bot",
-      "motivo": "STOP_LOSS"
+      "motivo": "STOP_LOSS",
+      "comision": 2.0,
+      "comision_estimada": false,
+      "pnl_neto": -11.6
     },
     {
       "ticker": "AMD",
@@ -219,7 +276,66 @@
       "invertido": 125.87,
       "pnl": -3.75,
       "origen": "bot",
-      "motivo": "STOP_LOSS"
+      "motivo": "STOP_LOSS",
+      "comision": 2.0,
+      "comision_estimada": true,
+      "pnl_neto": -5.75
+    },
+    {
+      "ticker": "GOOG",
+      "fecha_cierre": null,
+      "precio_entrada": null,
+      "precio_salida": null,
+      "unidades": null,
+      "invertido": null,
+      "pnl": 1.4,
+      "origen": "sin_confirmar",
+      "motivo": "STOP_LOSS",
+      "comision": 1.97,
+      "comision_estimada": false,
+      "pnl_neto": -0.57
+    },
+    {
+      "ticker": "GOOG",
+      "fecha_cierre": null,
+      "precio_entrada": null,
+      "precio_salida": null,
+      "unidades": null,
+      "invertido": null,
+      "pnl": 1.59,
+      "origen": "sin_confirmar",
+      "motivo": "STOP_LOSS",
+      "comision": 2.0,
+      "comision_estimada": false,
+      "pnl_neto": -0.41
+    },
+    {
+      "ticker": "TSLA",
+      "fecha_cierre": null,
+      "precio_entrada": null,
+      "precio_salida": null,
+      "unidades": null,
+      "invertido": null,
+      "pnl": 5.18,
+      "origen": "sin_confirmar",
+      "motivo": "STOP_LOSS",
+      "comision": 2.0,
+      "comision_estimada": false,
+      "pnl_neto": 3.18
+    },
+    {
+      "ticker": "TSLA",
+      "fecha_cierre": null,
+      "precio_entrada": null,
+      "precio_salida": null,
+      "unidades": null,
+      "invertido": null,
+      "pnl": 4.58,
+      "origen": "sin_confirmar",
+      "motivo": "STOP_LOSS",
+      "comision": 2.0,
+      "comision_estimada": false,
+      "pnl_neto": 2.58
     }
   ]
 }

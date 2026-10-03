@@ -146,3 +146,33 @@ def test_walk_forward_corre():
                          años_entrenamiento=2, verbose=False)
     assert len(wf) >= 1
     assert {"actual_retorno_total_pct", "spy_retorno_total_pct"} <= set(wf.columns)
+
+
+# ── Costes eToro ───────────────────────────────────────────────────────
+
+def test_costes_por_tipo_de_activo():
+    c = bt.BT_DEFAULTS
+    assert bt.costes_lado("AAPL", c) == (c["COSTE_PCT"], 1.0)      # acción: $1 por lado
+    assert bt.costes_lado("QQQ", c) == (c["COSTE_PCT"], 0.0)       # ETF: sin comisión
+    assert bt.costes_lado("BTC-USD", c) == (c["COSTE_PCT_CRIPTO"], 0.0)
+
+
+def test_operacion_de_accion_paga_comision_ida_y_vuelta(monkeypatch):
+    df = qc.calcular_indicadores(ohlcv(400, seed=21, deriva=0.0, vol=0.0001))
+    fecha = df.index[300]
+    monkeypatch.setattr(qc, "mascara_compra",
+                        lambda d, r, p=P, t="": pd.Series(d.index == fecha, index=d.index))
+    spy, vix = df["Close"], pd.Series(15.0, index=df.index)
+    sin_spread = {"COSTE_PCT": 0.0}
+    res = bt.backtest({"AAPL": df}, spy, vix, capital=2380, tickers=["AAPL"],
+                      inicio=df.index[250], bt=sin_spread)
+    op = res["operaciones"].iloc[0]
+    bruto = op["unidades"] * (op["precio_salida"] - op["precio_entrada"])
+    assert op["pnl"] == pytest.approx(bruto - 2.0, abs=0.01)   # $1 al abrir + $1 al cerrar
+
+
+def test_resumen_operaciones_reales_usa_pnl_neto():
+    r = bt.resumen_operaciones_reales()
+    assert {"bot", "pre_sistema", "total"} <= set(r.index)
+    ops = bt.cargar_operaciones_reales()
+    assert r.loc["total", "pnl_total"] == pytest.approx(ops["pnl_neto"].sum(), abs=0.01)

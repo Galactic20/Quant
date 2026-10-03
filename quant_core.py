@@ -191,6 +191,9 @@ SECTORES = {
     'NTAP': 'Almacenamiento',
 }
 
+# Fondos cotizados del universo (en eToro no pagan comisión por operación)
+ETFS = {'QQQ', 'VTI', 'IEF', 'XLE', 'GUSH', 'GLD', 'SLV'}
+
 # ETFs representativos por sector para el filtro de fuerza relativa
 SECTOR_ETFS = {
     'Big Tech':           'XLK',
