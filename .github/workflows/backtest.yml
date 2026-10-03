@@ -16,6 +16,9 @@ on:
       capital:
         description: 'Capital inicial en USD (vacio = CAPITAL_INICIAL de quant_core)'
         default: ''
+      spread:
+        description: 'Spread por lado en % (0.05 = acciones reales; 0.15 = tabla CFD, escenario pesimista)'
+        default: '0.05'
 
 jobs:
   backtest:
@@ -38,10 +41,12 @@ jobs:
           PERIODO: ${{ github.event.inputs.periodo }}
           WALK_FORWARD: ${{ github.event.inputs.walk_forward }}
           CAPITAL: ${{ github.event.inputs.capital }}
+          SPREAD: ${{ github.event.inputs.spread }}
         run: |
           ARGS="--periodo ${PERIODO:-10y} --salida resultados"
           if [ "$WALK_FORWARD" = "true" ]; then ARGS="$ARGS --walk-forward"; fi
           if [ -n "$CAPITAL" ]; then ARGS="$ARGS --capital $CAPITAL"; fi
+          if [ -n "$SPREAD" ]; then ARGS="$ARGS --spread $SPREAD"; fi
           python backtest.py $ARGS
           cat resultados/resumen.md >> "$GITHUB_STEP_SUMMARY"
 

@@ -475,22 +475,29 @@ def main():
     ap.add_argument("--periodo", default="10y")
     ap.add_argument("--capital", type=float, default=None)
     ap.add_argument("--walk-forward", action="store_true")
+    ap.add_argument("--spread", type=float, default=None,
+                    help="Spread por lado en %% (p. ej. 0.15 = tabla CFD de eToro)")
     ap.add_argument("--salida", default="resultados")
     args = ap.parse_args()
 
+    bt_cfg = dict(BT_DEFAULTS)
+    if args.spread is not None:
+        bt_cfg["COSTE_PCT"] = args.spread / 100
     datos, spy, vix = descargar(args.periodo)
     capital = args.capital or PARAMETROS["CAPITAL_INICIAL"]
     # Primer día con indicadores completos
     inicio = spy.index[0] + pd.DateOffset(days=300)
-    res = backtest(datos, spy, vix, capital=capital, inicio=inicio)
-    bench = benchmark(spy, capital, inicio=inicio)
+    res = backtest(datos, spy, vix, capital=capital, inicio=inicio, bt=bt_cfg)
+    bench = benchmark(spy, capital, inicio=inicio, bt=bt_cfg)
     wf = None
     if args.walk_forward:
         print("\nWalk-forward:")
-        wf = walk_forward(datos, spy, vix, capital=capital)
+        wf = walk_forward(datos, spy, vix, capital=capital, bt=bt_cfg)
 
     os.makedirs(args.salida, exist_ok=True)
     texto = reporte(res, bench, wf)
+    texto = texto.replace("# Backtest Quant Bot",
+                          f"# Backtest Quant Bot\nSpread por lado: {bt_cfg['COSTE_PCT'] * 100:.2f}%", 1)
     with open(os.path.join(args.salida, "resumen.md"), "w", encoding="utf-8") as f:
         f.write(texto)
     res["operaciones"].to_csv(os.path.join(args.salida, "operaciones.csv"), index=False)
@@ -498,7 +505,7 @@ def main():
         os.path.join(args.salida, "equity.csv"))
     if wf is not None:
         wf.to_csv(os.path.join(args.salida, "walk_forward.csv"), index=False)
-    adn = adn_por_activo(datos, spy, vix, inicio=inicio)
+    adn = adn_por_activo(datos, spy, vix, inicio=inicio, bt=bt_cfg)
     adn.to_csv(os.path.join(args.salida, "adn_por_activo.csv"), index=False)
     print("\n" + texto)
     print(f"\nArchivos guardados en {args.salida}/")
