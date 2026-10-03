@@ -345,7 +345,7 @@
       "unidades": null,
       "invertido": 50.0,
       "pnl": -8.92,
-      "origen": "sin_confirmar",
+      "origen": "pre_sistema",
       "motivo": null,
       "comision": 0.91,
       "comision_estimada": false,
