@@ -151,6 +151,11 @@ def texto_estado(modelo: dict, precios: dict) -> str:
         lineas.append(f"  Efectivo: {_usd(modelo['efectivo'])}")
     return "\n".join(lineas)
 
+NOTA_SIN_STOPS = ("Stop loss / take profit: NO usar en estos ETFs. En el backtest "
+                  "(2005-2026) todos los stops probados (10%-25%) bajaron la "
+                  "rentabilidad sin reducir las caidas, y el take profit no aporto. "
+                  "La salida es el rebalanceo mensual.")
+
 def texto_ordenes(ordenes: list) -> str:
     if not ordenes:
         return "Sin cambios: la cartera ya esta en su asignacion objetivo."
@@ -158,6 +163,8 @@ def texto_ordenes(ordenes: list) -> str:
     for o in ordenes:
         lineas.append(f"  {o['accion']} {o['ticker']}: {_usd(o['usd'])} "
                       f"(~{o['unidades']:.4f} u. a {_usd(o['precio'])})")
+    if any(o["accion"] == "COMPRAR" for o in ordenes):
+        lineas.append(NOTA_SIN_STOPS)
     return "\n".join(lineas)
 
 

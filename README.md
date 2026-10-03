@@ -1,6 +1,6 @@
 # Quant Bot
 
-Bot de inversión con ETFs (operado manualmente en eToro). Corre en GitHub
+Bot de inversión (operado manualmente en eToro). Corre en GitHub
 Actions y avisa por Telegram.
 
 **Estrategia actual (v3.0):** cartera modelo **50% SPY + 50% estrategia B**
@@ -9,8 +9,9 @@ Actions y avisa por Telegram.
 viernes, un resumen frente a SPY. El escáner de swing trading anterior sigue
 disponible con `ESTRATEGIA_BOT=quant`.
 
-**Satélite fundamental:** cartera virtual aparte ($1,000, 5 acciones) elegida
-con un filtro de calidad + valoración + crecimiento. Revisión trimestral,
+**Satélite fundamental:** cartera virtual aparte ($1,000, 5 acciones de EE. UU.
+y de otros mercados vía ADR) elegida con un filtro de calidad + valoración +
+crecimiento. Cada compra trae stop loss y take profit según la volatilidad. Revisión trimestral,
 reporte mensual del filtro y resumen semanal frente a SPY. Se desactiva con
 `SATELITE=0`.
 
@@ -32,7 +33,7 @@ reporte mensual del filtro y resumen semanal frente a SPY. Se desactiva con
 
 ## Uso
 
-- **Bot:** automático. Para probarlo: Actions → *Quant Bot Diario* → *Run workflow*.
+- **Bot:** automático. Para probarlo: Actions → *Bot de Inversión - Cartera ETF + Satélite* → *Run workflow*.
 - **Backtest:** Actions → *Backtest* → *Run workflow*. El resumen aparece en la página de la ejecución; los CSV se descargan como artefacto.
 - **Colab:** abre `notebooks/ultimate_quant_v3.ipynb` en Colab (Archivo → Abrir notebook → GitHub → `Galactic20/Quant`).
 - **Pruebas:** `python -m pytest -q`

@@ -154,3 +154,78 @@ def test_universo_sin_duplicados_ni_excluidos():
     u = fu.universo_acciones()
     assert "GOOG" in u and "GOOGL" not in u
     assert not {"JPM", "PLD", "NEE", "QQQ", "BTC-USD"} & set(u)
+
+
+# ── Stop loss / take profit ────────────────────────────────────────────
+
+def test_niveles_segun_volatilidad_y_acotados():
+    n = sa.niveles(100.0, 0.02)                 # 2 x 2% x sqrt(63) ≈ 31.7%
+    assert n["stop_loss"] == pytest.approx(100 * (1 - 0.317), abs=0.1)
+    assert n["take_profit"] == pytest.approx(100 * (1 + 2 * 0.317), abs=0.2)
+    assert sa.niveles(100.0, 0.001)["distancia_pct"] == 15.0   # mínimo
+    assert sa.niveles(100.0, 0.10)["distancia_pct"] == 35.0    # máximo
+
+
+def test_compras_traen_stop_loss_y_take_profit(tmp_path):
+    texto, _ = correr(date(2026, 10, 7), tmp_path / "sat.json", fundamentales())
+    assert texto.count("SL $") == 5 and texto.count("TP $") == 5
+    m = sa.cargar_modelo(str(tmp_path / "sat.json"))
+    for t, te in m["tesis"].items():
+        assert te["stop_loss"] < te["precio"] < te["take_profit"]
+
+
+def test_stop_loss_tocado_vende_y_avisa(tmp_path):
+    ruta = tmp_path / "sat.json"
+    df = fundamentales()
+    correr(date(2026, 10, 7), ruta, df)
+    m = sa.cargar_modelo(str(ruta))
+    t = sorted(m["unidades"])[0]
+    p = precios(df)
+    p[t] = m["tesis"][t]["stop_loss"] * 0.99
+    enviados = []
+    texto = sa.ejecutar(date(2026, 10, 14), enviar=enviados.append, precios=p, ruta=str(ruta))
+    assert "NIVEL ALCANZADO" in texto and f"VENDER {t}" in texto and "STOP LOSS" in texto
+    m2 = sa.cargar_modelo(str(ruta))
+    assert t not in m2["unidades"] and m2["efectivo"] > 100
+
+
+def test_posiciones_sin_niveles_reciben_niveles_una_vez(tmp_path):
+    ruta = tmp_path / "sat.json"
+    df = fundamentales()
+    correr(date(2026, 10, 7), ruta, df)
+    m = sa.cargar_modelo(str(ruta))
+    for te in m["tesis"].values():          # como la cartera creada antes de esta versión
+        te.pop("stop_loss"); te.pop("take_profit")
+    sa.guardar_modelo(m, str(ruta))
+    texto, _ = correr(date(2026, 10, 14), ruta, df)
+    assert "Pon estos niveles en eToro" in texto
+    texto2, _ = correr(date(2026, 10, 15), ruta, df)
+    assert texto2 is None
+
+
+def test_revision_solo_sube_el_stop():
+    m = {"unidades": {"AAPL": 1.0}, "tesis": {"AAPL": {"stop_loss": 90.0, "take_profit": 150.0}}}
+    assert sa.subir_stops(m, {"AAPL": 100.0}, {"AAPL": 0.01}) == []      # 100*(1-0.159)=84 < 90
+    assert sa.subir_stops(m, {"AAPL": 130.0}, {"AAPL": 0.01}) == ["AAPL"]
+    assert m["tesis"]["AAPL"]["stop_loss"] > 90
+
+
+# ── Internacionales ────────────────────────────────────────────────────
+
+def test_universo_incluye_internacionales():
+    u = fu.universo_acciones()
+    assert {"NVO", "SAP", "TM", "VALE", "FMX", "TSM"} <= set(u)
+    assert fu.sector_de("NVO") == "Salud" and fu.pais_de("NVO") == "Dinamarca"
+    assert fu.pais_de("AAPL") == "EE. UU."
+
+
+def test_conversion_a_usd():
+    fila = {"financialCurrency": "BRL", "freeCashflow": 10e9, "totalRevenue": 50e9,
+            "netIncomeToCommon": 5e9, "marketCap": 4e9, "fcf_hist": [10e9, 8e9]}
+    usd = fu.convertir_a_usd(fila, fx=lambda m: 0.2)
+    assert usd["freeCashflow"] == pytest.approx(2e9)
+    assert usd["fcf_hist"] == pytest.approx([2e9, 1.6e9])
+    assert usd["trailingPE"] == pytest.approx(4e9 / 1e9)
+    assert usd["financialCurrency"] == "USD" and usd["moneda_reporte"] == "BRL"
+    # Sin tipo de cambio queda en moneda local y el filtro la descarta
+    assert fu.convertir_a_usd(fila, fx=lambda m: None)["financialCurrency"] == "BRL"
