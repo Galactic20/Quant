@@ -12,7 +12,8 @@ Supuestos (ver BT_DEFAULTS):
     adelante; si el día abre más allá del nivel (gap), se ejecuta en la
     apertura. Si en un mismo día se tocan ambos, se asume el Stop Loss.
   - VENTA_URGENTE (cierre < SMA200) y STOP_DINAMICO (Chandelier) salen al cierre.
-  - Costes por operación: COSTE_PCT del monto (spread/conversión) + COSTE_FIJO.
+  - Costes de eToro por lado: comisión fija (acciones ~$1, ETFs $0) + spread
+    (COSTE_PCT); cripto paga COSTE_PCT_CRIPTO. Ver costes_lado().
   - Sin win rate histórico (igual que el bot en GitHub, que no tiene la base).
   - Sesgo de supervivencia: el universo son los activos de HOY.
 
@@ -33,15 +34,25 @@ import quant_core as qc
 from quant_core import PARAMETROS, SECTORES, SECTOR_ETFS
 
 BT_DEFAULTS = {
-    # Revisa los costes reales de tu cuenta eToro (spread y, si tu cuenta no
-    # está en USD, la comisión de conversión de divisa).
-    "COSTE_PCT":   0.0015,   # 0.15% por lado
-    "COSTE_FIJO":  0.0,      # USD por operación
+    # Costes observados en eToro (cuenta en USD, sin conversión de divisa):
+    # acciones ~$1 al abrir y ~$1 al cerrar; ETFs sin comisión.
+    "COMISION_ACCION":  1.0,     # USD por lado
+    "COMISION_ETF":     0.0,     # USD por lado
+    "COSTE_PCT":        0.0005,  # spread estimado, 0.05% por lado
+    "COSTE_PCT_CRIPTO": 0.01,    # cripto: 1% por lado
     "SALIDA_TP":   True,     # Cerrar al tocar el Take Profit
     "COMPONER":    True,     # Tamaño según el capital actual (no el inicial)
 }
 
 ORDEN_CALIDAD = {"ALTA": 0, "NORMAL": 1, "DEBIL": 2}
+
+def costes_lado(ticker: str, bt: dict) -> tuple[float, float]:
+    """(porcentaje, fijo_usd) que se paga en cada compra o venta del activo."""
+    if ticker.endswith("-USD"):
+        return bt["COSTE_PCT_CRIPTO"], 0.0
+    if ticker in qc.ETFS:
+        return bt["COSTE_PCT"], bt["COMISION_ETF"]
+    return bt["COSTE_PCT"], bt["COMISION_ACCION"]
 
 
 # ======================================================================
@@ -103,7 +114,8 @@ def backtest(datos: dict, spy_close: pd.Series, vix_close: pd.Series,
     def cerrar(t, fecha, precio, motivo):
         nonlocal cash
         pos = abiertas.pop(t)
-        neto = pos["unidades"] * precio * (1 - bt["COSTE_PCT"]) - bt["COSTE_FIJO"]
+        pct, fijo = costes_lado(t, bt)
+        neto = pos["unidades"] * precio * (1 - pct) - fijo
         cash += neto
         pnl = neto - pos["coste_total"]
         operaciones.append({
@@ -171,10 +183,11 @@ def backtest(datos: dict, spy_close: pd.Series, vix_close: pd.Series,
             if r["rr_ratio"] < p["RR_MINIMO"] or r["unidades"] <= 0:
                 continue
             unidades = r["unidades"]
-            coste = unidades * s["precio"] * (1 + bt["COSTE_PCT"]) + bt["COSTE_FIJO"]
+            pct, fijo = costes_lado(s["ticker"], bt)
+            coste = unidades * s["precio"] * (1 + pct) + fijo
             if coste > cash:
                 # Sin efectivo suficiente: compra lo que alcance
-                unidades = (cash - bt["COSTE_FIJO"]) / (s["precio"] * (1 + bt["COSTE_PCT"]))
+                unidades = (cash - fijo) / (s["precio"] * (1 + pct))
                 if p.get("FRACCIONES", False):
                     f = 10 ** p.get("DECIMALES_UNIDADES", 4)
                     unidades = math.floor(unidades * f) / f
@@ -182,7 +195,7 @@ def backtest(datos: dict, spy_close: pd.Series, vix_close: pd.Series,
                     unidades = math.floor(unidades)
                 if unidades <= 0 or unidades * s["precio"] < p.get("INVERSION_MINIMA", 0):
                     continue
-                coste = unidades * s["precio"] * (1 + bt["COSTE_PCT"]) + bt["COSTE_FIJO"]
+                coste = unidades * s["precio"] * (1 + pct) + fijo
             cash -= coste
             abiertas[s["ticker"]] = {
                 "fecha": fecha, "precio": s["precio"], "unidades": unidades,
@@ -249,8 +262,12 @@ def cargar_operaciones_reales(ruta: str = "datos/operaciones_reales.json") -> pd
 def resumen_operaciones_reales(ruta: str = "datos/operaciones_reales.json") -> pd.DataFrame:
     """Estadísticas separando las del bot de las previas al sistema."""
     ops = cargar_operaciones_reales(ruta)
-    filas = [{"grupo": g, **estadisticas_operaciones(d)} for g, d in ops.groupby("origen")]
-    filas.append({"grupo": "total", **estadisticas_operaciones(ops)})
+    col = "pnl_neto" if "pnl_neto" in ops else "pnl"   # neto de comisiones
+    filas = [{"grupo": g, **estadisticas_operaciones(d, col),
+              "comisiones": round(float(d.get("comision", pd.Series(0.0)).sum()), 2)}
+             for g, d in ops.groupby("origen")]
+    filas.append({"grupo": "total", **estadisticas_operaciones(ops, col),
+                  "comisiones": round(float(ops.get("comision", pd.Series(0.0)).sum()), 2)})
     return pd.DataFrame(filas).set_index("grupo")
 
 def metricas(equity: pd.Series, ops: pd.DataFrame = None,
@@ -286,7 +303,7 @@ def benchmark(precio: pd.Series, capital: float, inicio=None, fin=None,
         s = s[s.index >= pd.Timestamp(inicio)]
     if fin is not None:
         s = s[s.index <= pd.Timestamp(fin)]
-    unidades = (capital - bt["COSTE_FIJO"]) / (s.iloc[0] * (1 + bt["COSTE_PCT"]))
+    unidades = (capital - bt["COMISION_ETF"]) / (s.iloc[0] * (1 + bt["COSTE_PCT"]))
     eq = unidades * s
     return {"equity": eq, "metricas": metricas(eq)}
 
