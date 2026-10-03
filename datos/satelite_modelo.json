@@ -1,0 +1,123 @@
+{
+  "inicio": "2026-10-03",
+  "capital_inicial": 1000.0,
+  "efectivo": 0.0,
+  "unidades": {
+    "ADBE": 0.8368063358030031,
+    "OXY": 3.42459527770969,
+    "NVDA": 0.8501838110474679,
+    "INTU": 0.7076295343029082,
+    "META": 0.2731849457907263
+  },
+  "tesis": {
+    "ADBE": {
+      "fecha": "2026-10-03",
+      "precio": 237.69,
+      "nombre": "Adobe Inc.",
+      "sector": "Software/SaaS",
+      "puntaje": 0.796,
+      "roe_pct": 61.9,
+      "margen_op_pct": 34.8,
+      "fcf_yield_pct": 8.5,
+      "pe": 8.6,
+      "crec_ingresos_pct": 12.9,
+      "deuda_patrimonio": 0.6
+    },
+    "OXY": {
+      "fecha": "2026-10-03",
+      "precio": 58.08,
+      "nombre": "Occidental Petroleum Corporatio",
+      "sector": "Energía",
+      "puntaje": 0.781,
+      "roe_pct": 10.6,
+      "margen_op_pct": 45.4,
+      "fcf_yield_pct": 12.1,
+      "pe": 14.5,
+      "crec_ingresos_pct": 53.4,
+      "deuda_patrimonio": 0.3
+    },
+    "NVDA": {
+      "fecha": "2026-10-03",
+      "precio": 233.95,
+      "nombre": "NVIDIA Corporation",
+      "sector": "Semiconductores",
+      "puntaje": 0.715,
+      "roe_pct": 117.2,
+      "margen_op_pct": 66.2,
+      "fcf_yield_pct": 0.8,
+      "pe": 14.9,
+      "crec_ingresos_pct": 105.9,
+      "deuda_patrimonio": 0.2
+    },
+    "INTU": {
+      "fecha": "2026-10-03",
+      "precio": 281.08,
+      "nombre": "Intuit Inc.",
+      "sector": "Software",
+      "puntaje": 0.698,
+      "roe_pct": 23.6,
+      "margen_op_pct": 17.6,
+      "fcf_yield_pct": 8.0,
+      "pe": 10.4,
+      "crec_ingresos_pct": 13.7,
+      "deuda_patrimonio": 0.4
+    },
+    "META": {
+      "fecha": "2026-10-03",
+      "precio": 728.08,
+      "nombre": "Meta Platforms, Inc.",
+      "sector": "Big Tech",
+      "puntaje": 0.599,
+      "roe_pct": 29.8,
+      "margen_op_pct": 34.8,
+      "fcf_yield_pct": 2.2,
+      "pe": 20.9,
+      "crec_ingresos_pct": 28.0,
+      "deuda_patrimonio": 0.4
+    }
+  },
+  "referencia_spy_unidades": 1.299308743006025,
+  "ultimo_cierre_mes": null,
+  "historial": [
+    {
+      "fecha": "2026-10-03",
+      "accion": "COMPRAR",
+      "ticker": "ADBE",
+      "usd": 200.0,
+      "precio": 237.69,
+      "unidades": 0.8368
+    },
+    {
+      "fecha": "2026-10-03",
+      "accion": "COMPRAR",
+      "ticker": "OXY",
+      "usd": 200.0,
+      "precio": 58.08,
+      "unidades": 3.4246
+    },
+    {
+      "fecha": "2026-10-03",
+      "accion": "COMPRAR",
+      "ticker": "NVDA",
+      "usd": 200.0,
+      "precio": 233.95,
+      "unidades": 0.8502
+    },
+    {
+      "fecha": "2026-10-03",
+      "accion": "COMPRAR",
+      "ticker": "INTU",
+      "usd": 200.0,
+      "precio": 281.08,
+      "unidades": 0.7076
+    },
+    {
+      "fecha": "2026-10-03",
+      "accion": "COMPRAR",
+      "ticker": "META",
+      "usd": 200.0,
+      "precio": 728.08,
+      "unidades": 0.2732
+    }
+  ]
+}
