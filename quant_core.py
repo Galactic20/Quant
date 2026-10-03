@@ -121,7 +121,10 @@ PARAMETROS = {
     # acción con ATR > ~$9.5 porque salían 0 unidades.
     "FRACCIONES":          True,
     "DECIMALES_UNIDADES":     4,
-    "INVERSION_MINIMA":      10,   # USD; mínimo por posición en eToro
+    # eToro cobra ~$1 al abrir y ~$1 al cerrar cada acción: con menos de
+    # $200 por posición la comisión supera el 1% del monto. Las señales cuyo
+    # tamaño por riesgo queda bajo este mínimo se descartan.
+    "INVERSION_MINIMA":     200,   # USD por posición
     "MAX_INVERSION_PCT":   0.25,   # Tope por posición (% del capital)
 }
 PARAMETROS["RIESGO_USD_BASE"] = (

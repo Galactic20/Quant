@@ -73,7 +73,7 @@ def test_tope_y_minimo_de_inversion():
     r = qc.calcular_gestion_riesgo(100.0, 0.2, "ALTA", 2380)   # stop muy cercano
     assert r["inversion"] <= 2380 * P["MAX_INVERSION_PCT"] + 0.01
     r = qc.calcular_gestion_riesgo(100.0, 20.0, "DEBIL", 300)  # $1.5 de riesgo
-    assert r["unidades"] == 0                                    # < $10 eToro
+    assert r["unidades"] == 0                                    # < mínimo eToro
 
 
 # ── Motor ──────────────────────────────────────────────────────────────
@@ -176,3 +176,11 @@ def test_resumen_operaciones_reales_usa_pnl_neto():
     assert {"bot", "pre_sistema", "total"} <= set(r.index)
     ops = bt.cargar_operaciones_reales()
     assert r.loc["total", "pnl_total"] == pytest.approx(ops["pnl_neto"].sum(), abs=0.01)
+
+
+def test_minimo_200_descarta_posiciones_chicas():
+    # Riesgo $23.8 con stop lejano → ~$119 de inversión: bajo el mínimo de $200
+    r = qc.calcular_gestion_riesgo(50.0, 4.0, "NORMAL", 2380)
+    assert r["unidades"] == 0
+    r = qc.calcular_gestion_riesgo(50.0, 1.0, "NORMAL", 2380)   # ~$476
+    assert r["inversion"] >= 200

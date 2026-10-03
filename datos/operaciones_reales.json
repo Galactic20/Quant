@@ -11,9 +11,9 @@
       "pnl": 2.12,
       "origen": "bot",
       "motivo": null,
-      "comision": 2.0,
-      "comision_estimada": true,
-      "pnl_neto": 0.12
+      "comision": 1.91,
+      "comision_estimada": false,
+      "pnl_neto": 0.21
     },
     {
       "ticker": "QQQ",
@@ -46,16 +46,16 @@
     {
       "ticker": "TSM",
       "fecha_cierre": "2026-02-11",
-      "precio_entrada": 196.94,
+      "precio_entrada": 196.64,
       "precio_salida": 376.3101,
       "unidades": 0.2547,
       "invertido": 50.16,
-      "pnl": 45.69,
+      "pnl": 45.68,
       "origen": "pre_sistema",
       "motivo": null,
-      "comision": 2.0,
-      "comision_estimada": true,
-      "pnl_neto": 43.69
+      "comision": 1.51,
+      "comision_estimada": false,
+      "pnl_neto": 44.17
     },
     {
       "ticker": "TSM",
@@ -67,9 +67,9 @@
       "pnl": 45.84,
       "origen": "pre_sistema",
       "motivo": null,
-      "comision": 2.0,
-      "comision_estimada": true,
-      "pnl_neto": 43.84
+      "comision": 1.51,
+      "comision_estimada": false,
+      "pnl_neto": 44.33
     },
     {
       "ticker": "ON",
@@ -95,9 +95,9 @@
       "pnl": 30.3,
       "origen": "pre_sistema",
       "motivo": null,
-      "comision": 0.0,
-      "comision_estimada": true,
-      "pnl_neto": 30.3
+      "comision": -0.86,
+      "comision_estimada": false,
+      "pnl_neto": 31.16
     },
     {
       "ticker": "IEF",
@@ -152,7 +152,7 @@
       "origen": "bot",
       "motivo": null,
       "comision": 2.0,
-      "comision_estimada": true,
+      "comision_estimada": false,
       "pnl_neto": -3.16
     },
     {
@@ -166,7 +166,7 @@
       "origen": "bot",
       "motivo": null,
       "comision": 2.0,
-      "comision_estimada": true,
+      "comision_estimada": false,
       "pnl_neto": -3.32
     },
     {
@@ -270,15 +270,15 @@
     {
       "ticker": "AMD",
       "fecha_cierre": null,
-      "precio_entrada": null,
-      "precio_salida": null,
+      "precio_entrada": 199.79,
+      "precio_salida": 193.84,
       "unidades": null,
       "invertido": 125.87,
       "pnl": -3.75,
       "origen": "bot",
       "motivo": "STOP_LOSS",
       "comision": 2.0,
-      "comision_estimada": true,
+      "comision_estimada": false,
       "pnl_neto": -5.75
     },
     {
@@ -289,7 +289,7 @@
       "unidades": null,
       "invertido": null,
       "pnl": 1.4,
-      "origen": "sin_confirmar",
+      "origen": "pre_sistema",
       "motivo": "STOP_LOSS",
       "comision": 1.97,
       "comision_estimada": false,
@@ -303,7 +303,7 @@
       "unidades": null,
       "invertido": null,
       "pnl": 1.59,
-      "origen": "sin_confirmar",
+      "origen": "pre_sistema",
       "motivo": "STOP_LOSS",
       "comision": 2.0,
       "comision_estimada": false,
@@ -317,7 +317,7 @@
       "unidades": null,
       "invertido": null,
       "pnl": 5.18,
-      "origen": "sin_confirmar",
+      "origen": "pre_sistema",
       "motivo": "STOP_LOSS",
       "comision": 2.0,
       "comision_estimada": false,
@@ -331,11 +331,25 @@
       "unidades": null,
       "invertido": null,
       "pnl": 4.58,
-      "origen": "sin_confirmar",
+      "origen": "pre_sistema",
       "motivo": "STOP_LOSS",
       "comision": 2.0,
       "comision_estimada": false,
       "pnl_neto": 2.58
+    },
+    {
+      "ticker": "ETH-USD",
+      "fecha_cierre": null,
+      "precio_entrada": 3626.64,
+      "precio_salida": 2979.59,
+      "unidades": null,
+      "invertido": 50.0,
+      "pnl": -8.92,
+      "origen": "pre_sistema",
+      "motivo": null,
+      "comision": 0.91,
+      "comision_estimada": false,
+      "pnl_neto": -9.83
     }
   ]
 }
