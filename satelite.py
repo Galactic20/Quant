@@ -34,7 +34,7 @@ MODELO_FILE = "datos/satelite_modelo.json"
 CONFIG = {
     "CAPITAL":        1000.0,  # capital virtual del satélite
     "N_ACCIONES":     5,       # 5 x $200: con menos de $200 la comisión supera el 1%
-    "MAX_POR_SECTOR": 2,
+    "MAX_POR_SECTOR": 1,       # con 5 acciones, una por sector para diversificar
     "BUFFER":         15,      # se mantiene mientras siga en el top 15
     "COMISION":       1.0,     # USD por lado (eToro)
     "COSTE_PCT":      0.0005,  # spread por lado

@@ -148,3 +148,9 @@ def test_fcf_promedio_suaviza_el_pico_ciclico():
                        CAT={**base, "fcf_hist": [1e10, 9e9, 9.5e9]})
     r = fu.puntuar(df)
     assert r.at["AMD", "fcf_yield"] < r.at["CAT", "fcf_yield"]
+
+
+def test_universo_sin_duplicados_ni_excluidos():
+    u = fu.universo_acciones()
+    assert "GOOG" in u and "GOOGL" not in u
+    assert not {"JPM", "PLD", "NEE", "QQQ", "BTC-USD"} & set(u)

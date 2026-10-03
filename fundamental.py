@@ -49,9 +49,13 @@ CAMPOS = ["shortName", "marketCap", "currentPrice", "returnOnEquity",
 NUMERICOS = [c for c in CAMPOS if c not in ("shortName", "financialCurrency")]
 
 
+# Misma empresa con dos clases de acción: se analiza solo una
+DUPLICADOS = {"GOOGL"}
+
 def universo_acciones() -> list:
     return [t for t, s in qc.SECTORES.items()
-            if t not in qc.ETFS and not t.endswith("-USD") and s not in SECTORES_EXCLUIDOS]
+            if t not in qc.ETFS and t not in DUPLICADOS and not t.endswith("-USD")
+            and s not in SECTORES_EXCLUIDOS]
 
 
 def obtener_fundamentales(tickers: list = None, pausa: float = 0.3) -> pd.DataFrame:
