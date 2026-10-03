@@ -13,12 +13,12 @@
 ╚══════════════════════════════════════════════════════════════════════╝
 
 ARCHIVOS DEL SISTEMA:
-    quant_core.py             ← Este archivo (fuente única de verdad)
-    bot_telegram.py           ← Bot de GitHub Actions
-    ultimate_quant_colab.py   ← Notebook de Google Colab
-    posiciones.json           ← Posiciones abiertas (compartido)
-    mi_universo_quant.csv     ← Base de datos del backtest
-    mi_bitacora.json          ← Historial de trades
+    quant_core.py                    ← Este archivo (fuente única de verdad)
+    bot_telegram.py                  ← Bot de GitHub Actions
+    backtest.py                      ← Backtest con las mismas reglas del bot
+    notebooks/ultimate_quant_v3.ipynb← Colab (descarga este repo, sin copia propia)
+    posiciones.json                  ← Posiciones abiertas (compartido)
+    datos/operaciones_reales.json    ← Operaciones cerradas en eToro
 """
 
 import yfinance as yf
@@ -113,8 +113,16 @@ PARAMETROS = {
     # ── Backtest ──
     "DIAS_REVISION":        10,
 
-    # ── Capital ──
+    # ── Capital y ejecución (eToro) ──
     "CAPITAL_INICIAL":    2380,
+    # eToro permite fracciones de acción: las unidades se redondean a
+    # DECIMALES_UNIDADES en vez de a acciones enteras. Con False se vuelve
+    # al comportamiento anterior (acciones enteras), que descartaba toda
+    # acción con ATR > ~$9.5 porque salían 0 unidades.
+    "FRACCIONES":          True,
+    "DECIMALES_UNIDADES":     4,
+    "INVERSION_MINIMA":      10,   # USD; mínimo por posición en eToro
+    "MAX_INVERSION_PCT":   0.25,   # Tope por posición (% del capital)
 }
 PARAMETROS["RIESGO_USD_BASE"] = (
     PARAMETROS["CAPITAL_INICIAL"] * PARAMETROS["RIESGO_NORMAL"]
@@ -361,6 +369,30 @@ REGIMENES = {
     },
 }
 
+def clasificar_regimen(spy: float, sma200: float, sma50: float,
+                       vix: float, p: dict = PARAMETROS) -> str:
+    """Regla de régimen (compartida por el bot y el backtest)."""
+    if vix > p["VIX_PANICO"]:
+        return "PANICO"
+    if not spy > sma200:
+        return "BAJISTA"
+    if sma50 > sma200 and vix < p["VIX_ALERTA"]:
+        return "TENDENCIA_ALCISTA"
+    return "RECUPERACION"
+
+def serie_regimen(spy_close: pd.Series, vix_close: pd.Series,
+                  p: dict = PARAMETROS) -> pd.Series:
+    """Régimen de cada día histórico (NaN-safe: sin datos → RECUPERACION)."""
+    vix    = vix_close.reindex(spy_close.index).ffill()
+    sma200 = spy_close.rolling(200).mean()
+    sma50  = spy_close.rolling(50).mean()
+    reg = pd.Series("RECUPERACION", index=spy_close.index)
+    reg[(sma50 > sma200) & (vix < p["VIX_ALERTA"])] = "TENDENCIA_ALCISTA"
+    reg[~(spy_close > sma200)] = "BAJISTA"
+    reg[vix > p["VIX_PANICO"]] = "PANICO"
+    reg[sma200.isna() | vix.isna()] = "RECUPERACION"
+    return reg
+
 def detectar_regimen(p: dict = PARAMETROS) -> tuple[str, dict]:
     """
     Descarga SPY y VIX por separado (evita problemas de MultiIndex
@@ -386,19 +418,7 @@ def detectar_regimen(p: dict = PARAMETROS) -> tuple[str, dict]:
         sma50     = float(spy_close.rolling(50).mean().iloc[-1])
         vix       = float(vix_close.iloc[-1])
 
-        spy_sobre_200  = spy   > sma200
-        golden_cross   = sma50 > sma200
-        vix_controlado = vix   < p["VIX_ALERTA"]
-        vix_panico     = vix   > p["VIX_PANICO"]
-
-        if vix_panico:
-            regimen = "PANICO"
-        elif not spy_sobre_200:
-            regimen = "BAJISTA"
-        elif spy_sobre_200 and golden_cross and vix_controlado:
-            regimen = "TENDENCIA_ALCISTA"
-        else:
-            regimen = "RECUPERACION"
+        regimen = clasificar_regimen(spy, sma200, sma50, vix, p)
 
         contexto = {
             "regimen":    regimen,
@@ -450,16 +470,17 @@ def calcular_fuerza_relativa(ticker: str, sector: str,
         return None
 
     try:
-        periodo = p["RS_PERIODO"]
-        ret_activo = float(
-            datos[ticker]['Close'].pct_change(periodo).iloc[-1]
-        )
-        ret_sector = float(
-            datos[etf]['Close'].pct_change(periodo).iloc[-1]
-        )
-        return round(ret_activo - ret_sector, 4)
+        rs = float(serie_fuerza_relativa(datos[ticker], datos[etf], p).iloc[-1])
+        return None if math.isnan(rs) else round(rs, 4)
     except Exception:
         return None
+
+def serie_fuerza_relativa(df_activo: pd.DataFrame, df_etf: pd.DataFrame,
+                          p: dict = PARAMETROS) -> pd.Series:
+    """Retorno del activo menos el de su ETF en RS_PERIODO días, por fecha."""
+    periodo = p["RS_PERIODO"]
+    ret_etf = df_etf['Close'].pct_change(periodo).reindex(df_activo.index)
+    return df_activo['Close'].pct_change(periodo) - ret_etf
 
 def pasa_filtro_rs(ticker: str, sector: str,
                    datos: dict, p: dict = PARAMETROS) -> bool:
@@ -575,8 +596,20 @@ def calcular_gestion_riesgo(precio: float, atr: float,
     dist_sl  = atr * p["ATR_SL"]
     sl       = precio - dist_sl
     tp       = precio + (atr * p["ATR_TP"])
-    unidades = math.floor(riesgo / dist_sl) if dist_sl > 0 else 0
     rr       = (tp - precio) / dist_sl if dist_sl > 0 else 0
+    unidades = 0
+    if dist_sl > 0 and precio > 0:
+        unidades = riesgo / dist_sl
+        # Tope por posición: evita concentrar el capital en activos de baja
+        # volatilidad (stop muy cercano → muchas unidades)
+        unidades = min(unidades, cap * p.get("MAX_INVERSION_PCT", 1.0) / precio)
+        if p.get("FRACCIONES", False):
+            factor   = 10 ** p.get("DECIMALES_UNIDADES", 4)
+            unidades = math.floor(unidades * factor) / factor
+        else:
+            unidades = math.floor(unidades)
+        if unidades * precio < p.get("INVERSION_MINIMA", 0):
+            unidades = 0
 
     return {
         "stop_loss":    round(sl,               2),
@@ -658,6 +691,49 @@ def filtrar_por_correlacion(señales: list[dict],
 # 10. LÓGICA DE SEÑALES — FUNCIÓN ÚNICA Y COMPARTIDA
 # ======================================================================
 
+def umbrales_entrada(regimen: str, ticker: str = "",
+                     p: dict = PARAMETROS) -> tuple[float, float] | None:
+    """(rsi_max, rv_min) para el régimen y ticker, o None si no se compra."""
+    if regimen in ("PANICO", "BAJISTA"):
+        return None
+    rsi_max = (p["RSI_ENTRADA_REC"] if regimen == "RECUPERACION"
+               else p["RSI_ENTRADA"])
+    rv_min  = (p["RV_MIN_REC"]      if regimen == "RECUPERACION"
+               else p["RV_MIN"])
+    excepciones = p.get("EXCEPCIONES_RSI", {})
+    if ticker and ticker in excepciones:
+        rsi_max = excepciones[ticker]
+    return rsi_max, rv_min
+
+def mascara_compra(df: pd.DataFrame, regimen: pd.Series,
+                   p: dict = PARAMETROS, ticker: str = "") -> pd.Series:
+    """
+    Versión vectorizada de es_senal_compra para todo el histórico.
+    `regimen` es una Serie (de serie_regimen) alineada por fecha.
+    Las pruebas verifican que coincide fila a fila con es_senal_compra.
+    """
+    reg     = regimen.reindex(df.index)
+    rsi_max = pd.Series(np.nan, index=df.index)
+    rv_min  = pd.Series(np.nan, index=df.index)
+    for nombre in ("TENDENCIA_ALCISTA", "RECUPERACION"):
+        u = umbrales_entrada(nombre, ticker, p)
+        rsi_max[reg == nombre] = u[0]
+        rv_min[reg == nombre]  = u[1]
+    return (
+        (df['RSI']   < rsi_max)               &
+        (df['RV']    > rv_min)                &
+        (df['Close'] > df['Open'])            &
+        (df['Close'] > df['SMA_200'])         &
+        (df['Close'] > df['Chandelier_Exit'])
+    ).fillna(False)
+
+def mascara_venta_urgente(df: pd.DataFrame) -> pd.Series:
+    return (df['Close'] < df['SMA_200']).fillna(False)
+
+def mascara_stop_dinamico(df: pd.DataFrame, p: dict = PARAMETROS) -> pd.Series:
+    margen = df['ATR'] * p.get("MARGEN_CHANDELIER", 0.10)
+    return (df['Close'] < df['Chandelier_Exit'] - margen).fillna(False)
+
 def es_senal_compra(row: pd.Series, regimen: str,
                     p: dict = PARAMETROS,
                     ticker: str = "") -> bool:
@@ -671,19 +747,10 @@ def es_senal_compra(row: pd.Series, regimen: str,
     Excepciones por ticker (respaldadas por análisis histórico):
       GOOG, GOOGL → RSI < 50 (9 señales históricas, WR 77.8%)
     """
-    if regimen in ("PANICO", "BAJISTA"):
+    umbrales = umbrales_entrada(regimen, ticker, p)
+    if umbrales is None:
         return False
-
-    # Umbral base por régimen
-    rsi_max = (p["RSI_ENTRADA_REC"] if regimen == "RECUPERACION"
-               else p["RSI_ENTRADA"])
-    rv_min  = (p["RV_MIN_REC"]      if regimen == "RECUPERACION"
-               else p["RV_MIN"])
-
-    # Excepción por ticker si existe
-    excepciones = p.get("EXCEPCIONES_RSI", {})
-    if ticker and ticker in excepciones:
-        rsi_max = excepciones[ticker]
+    rsi_max, rv_min = umbrales
 
     try:
         return (
@@ -910,7 +977,7 @@ def motor_quant(ticker: str,
                 f"{rs:.2%}" if rs is not None else "N/A"
             ),
             "regimen":       regimen,
-            "accion":        f"🛒 COMPRAR {riesgo['unidades']} u. ({calidad})",
+            "accion":        f"🛒 COMPRAR {riesgo['unidades']:g} u. ({calidad})",
         }
 
     except Exception as e:
@@ -1082,7 +1149,7 @@ def formatear_alerta(señal: dict) -> str | None:
             f"Régimen: `{reg}` | RSI: `{rsi}` | Mano Fuerte: `{rv}x`\n"
             f"Fuerza vs sector: `{rs}`\n"
             f"{'─'*35}\n"
-            f"📌 Comprar: `{int(señal['unidades'])} acciones` — ${señal['inversion']}\n"
+            f"📌 Comprar: `{float(señal['unidades']):g} acciones` — ${señal['inversion']}\n"
             f"🛑 Stop Loss: `${señal['stop_loss']}`\n"
             f"✅ Take Profit: `${señal['take_profit']}`\n"
             f"📊 R:R: `{señal['rr_ratio']}:1` | "
