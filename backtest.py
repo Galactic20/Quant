@@ -39,7 +39,7 @@ BT_DEFAULTS = {
     "COMISION_ACCION":  1.0,     # USD por lado
     "COMISION_ETF":     0.0,     # USD por lado
     "COSTE_PCT":        0.0005,  # spread estimado, 0.05% por lado
-    "COSTE_PCT_CRIPTO": 0.01,    # cripto: 1% por lado
+    "COSTE_PCT_CRIPTO": 0.01,    # cripto: 1% por lado (verificado con ETH)
     "SALIDA_TP":   True,     # Cerrar al tocar el Take Profit
     "COMPONER":    True,     # Tamaño según el capital actual (no el inicial)
 }
