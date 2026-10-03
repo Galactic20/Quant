@@ -78,12 +78,14 @@ jobs:
         run: |
           git config user.name  'Quant Bot'
           git config user.email 'bot@quant.local'
-          git add posiciones.json chandelier_prev.json || true
+          for f in posiciones.json chandelier_prev.json datos/cartera_modelo.json; do
+            if [ -f "$f" ]; then git add "$f"; fi
+          done
           if git diff --staged --quiet; then
             echo "Sin cambios que guardar."
             exit 0
           fi
-          git commit -m 'Auto: posiciones y chandelier actualizados'
+          git commit -m 'Auto: cartera y posiciones actualizadas'
           # Si editaste posiciones.json mientras corria el bot, integra tu cambio
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push

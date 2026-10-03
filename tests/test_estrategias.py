@@ -70,6 +70,14 @@ def test_comparar_y_retornos_anuales():
     p = precios_sinteticos()
     eq_bot = pd.Series(np.linspace(1000, 1100, len(p)), index=p.index)
     tabla, anual = es.comparar(p, 1000, 0.0, p.index[300], extra={"Bot": eq_bot})
-    assert len(tabla) == 4
+    assert len(tabla) == len(es.ESTRATEGIAS) + 1
     assert set(anual.columns) >= {"SPY (comprar y mantener)", "Bot"}
     assert anual.index.min() >= 2021
+
+
+def test_mezcla_spy_mas_b():
+    p = precios_sinteticos()
+    p["QQQ"] = np.linspace(100, 300, len(p))
+    assert es.regla_spy_mas_b(0.5)(p) == {"SPY": 0.5, "QQQ": 0.5}
+    p["SPY"] = np.linspace(100, 400, len(p))     # si B elige SPY → 100% SPY
+    assert es.regla_spy_mas_b(0.5)(p) == {"SPY": 1.0}
