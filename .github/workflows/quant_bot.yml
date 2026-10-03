@@ -45,11 +45,11 @@ jobs:
 
       # 1. Descarga el codigo del repositorio al servidor de GitHub
       - name: Checkout del repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # 2. Instala Python 3.11 con cache de pip (se invalida al cambiar requirements.txt)
       - name: Configurar Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'
