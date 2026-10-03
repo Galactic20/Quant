@@ -9,7 +9,11 @@ Actions y avisa por Telegram.
 viernes, un resumen frente a SPY. El escáner de swing trading anterior sigue
 disponible con `ESTRATEGIA_BOT=quant`.
 
-**Satélite fundamental:** cartera virtual aparte ($1,000, 5 acciones de EE. UU.
+**Estado actual:** la cartera ETF está **en pausa** hasta definir el capital
+real (`cartera.CONFIG["CAPITAL_INICIAL"]`); al definirlo, la siguiente
+ejecución crea la cartera y envía las primeras órdenes.
+
+**Satélite fundamental (solo virtual, aprendizaje):** cartera virtual aparte ($1,000, 5 acciones de EE. UU.
 y de otros mercados vía ADR) elegida con un filtro de calidad + valoración +
 crecimiento. Cada compra trae stop loss y take profit según la volatilidad. Revisión trimestral,
 reporte mensual del filtro y resumen semanal frente a SPY. Se desactiva con

@@ -29,7 +29,9 @@ MODELO_FILE = "datos/cartera_modelo.json"
 CONFIG = {
     "PESO_SPY":        0.5,     # el resto va a la elección de la estrategia B
     "APORTE_MENSUAL":  100.0,   # USD que agregas cada fin de mes
-    "CAPITAL_INICIAL": qc.PARAMETROS["CAPITAL_INICIAL"],
+    # Capital real con el que se inicia la cartera. None = en pausa: el bot
+    # no crea la cartera ni envía órdenes hasta que se defina el monto.
+    "CAPITAL_INICIAL": None,
     "ORDEN_MINIMA":    10.0,    # USD; diferencias menores no se operan (mínimo eToro)
     "COSTE_PCT":       es.COSTE_PCT_ETF,
 }
@@ -175,6 +177,15 @@ def texto_ordenes(ordenes: list) -> str:
 def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
              precios_hist=None, cfg: dict = CONFIG, ruta: str = MODELO_FILE) -> str | None:
     """Decide qué hacer hoy, actualiza el modelo y envía el mensaje. Devuelve el texto."""
+    if cargar_modelo(ruta) is None and not cfg.get("CAPITAL_INICIAL"):
+        texto = ("CARTERA ETF (50% SPY + 50% B) - EN PAUSA\n"
+                 "Esperando el capital inicial real para crear la cartera y enviar las "
+                 "primeras ordenes. El satelite virtual sigue funcionando.")
+        print(texto)
+        if manual:
+            enviar(texto)
+            return texto
+        return None
     hist = precios_hist if precios_hist is not None else es.descargar_etfs(periodo="2y")
     precios = {t: float(hist[t].iloc[-1]) for t in hist.columns}
     puntajes = es.puntajes_momentum(hist)
