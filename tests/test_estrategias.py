@@ -81,3 +81,22 @@ def test_mezcla_spy_mas_b():
     assert es.regla_spy_mas_b(0.5)(p) == {"SPY": 0.5, "QQQ": 0.5}
     p["SPY"] = np.linspace(100, 400, len(p))     # si B elige SPY → 100% SPY
     assert es.regla_spy_mas_b(0.5)(p) == {"SPY": 1.0}
+
+
+def test_stop_movil_pasa_a_efectivo_y_recompra_en_rebalanceo():
+    idx = pd.bdate_range("2021-01-01", periods=300)
+    spy = np.r_[np.linspace(100, 150, 150), np.linspace(150, 120, 20), np.linspace(120, 160, 130)]
+    p = pd.DataFrame({"SPY": spy, "IEF": 100.0}, index=idx)
+    r = es.simular(p, es.regla_comprar_mantener("SPY"), 1000, coste_pct=0.0, stop_pct=0.10)
+    assert r["stops"] >= 1
+    # Tras el stop vuelve a comprar en el rebalanceo mensual y termina invertido
+    assert r["valor"].iloc[-1] > r["valor"].iloc[175]
+    sin = es.simular(p, es.regla_comprar_mantener("SPY"), 1000, coste_pct=0.0)
+    assert sin["stops"] == 0
+
+
+def test_take_profit_se_ejecuta():
+    idx = pd.bdate_range("2021-01-01", periods=120)
+    p = pd.DataFrame({"SPY": np.linspace(100, 160, 120), "IEF": 100.0}, index=idx)
+    r = es.simular(p, es.regla_comprar_mantener("SPY"), 1000, coste_pct=0.0, tp_pct=0.20)
+    assert r["tps"] >= 1

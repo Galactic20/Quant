@@ -9,8 +9,12 @@ puede validar con backtest: se valida hacia adelante con la cartera satélite).
   Filtros mínimos (descartan la acción):
     capitalización ≥ $10B · flujo de caja libre > 0 en TODOS los años
     disponibles (hasta 4) · ROE ≥ 10% · deuda/patrimonio ≤ 2x · P/E positivo
-    · estados financieros en USD (en los ADRs yfinance mezcla moneda local
-      con capitalización en USD y las razones salen distorsionadas)
+    · moneda de reporte convertible a USD (en los ADRs yfinance da los
+      estados en moneda local y la capitalización en USD: se convierten al
+      tipo de cambio actual antes de calcular las razones)
+
+  Universo: acciones de EE. UU. del bot + empresas internacionales grandes
+  que cotizan en EE. UU. como ADR (UNIVERSO_INTERNACIONAL).
     Se excluyen bancos/finanzas, REITs, utilities, ETFs y cripto: sus
     métricas de deuda y flujo de caja no son comparables con el resto.
 
@@ -45,17 +49,103 @@ PESOS = {"calidad": 0.50, "valor": 0.35, "crecimiento": 0.15}
 
 CAMPOS = ["shortName", "marketCap", "currentPrice", "returnOnEquity",
           "operatingMargins", "freeCashflow", "totalRevenue", "debtToEquity",
-          "trailingPE", "forwardPE", "revenueGrowth", "financialCurrency"]
+          "trailingPE", "forwardPE", "revenueGrowth", "financialCurrency",
+          "netIncomeToCommon"]
 NUMERICOS = [c for c in CAMPOS if c not in ("shortName", "financialCurrency")]
+
+# Montos de los estados financieros (se convierten a USD si hace falta)
+MONTOS = ["freeCashflow", "totalRevenue", "netIncomeToCommon"]
+
+# Empresas internacionales rentables que cotizan en EE. UU. (ADR) -> (sector, país)
+UNIVERSO_INTERNACIONAL = {
+    # Europa
+    "NVO":  ("Salud", "Dinamarca"),          "AZN":  ("Salud", "Reino Unido"),
+    "NVS":  ("Salud", "Suiza"),              "SAP":  ("Software", "Alemania"),
+    "UL":   ("Consumo defensivo", "Reino Unido"), "DEO": ("Bebidas", "Reino Unido"),
+    "BTI":  ("Tabaco", "Reino Unido"),       "RELX": ("Servicios profesionales", "Reino Unido"),
+    "SHEL": ("Energía", "Reino Unido"),      "TTE":  ("Energía", "Francia"),
+    # Asia-Pacífico
+    "TM":   ("Automotriz", "Japón"),         "SONY": ("Electrónica", "Japón"),
+    "INFY": ("Servicios IT", "India"),       "PDD":  ("E-commerce", "China"),
+    "BHP":  ("Minería", "Australia"),        "RIO":  ("Minería", "Reino Unido/Australia"),
+    # Canadá
+    "CNQ":  ("Energía", "Canadá"),           "CP":   ("Transporte", "Canadá"),
+    # Latinoamérica
+    "VALE": ("Minería", "Brasil"),           "PBR":  ("Energía", "Brasil"),
+    "SQM":  ("Químicos", "Chile"),           "FMX":  ("Bebidas", "México"),
+    "AMX":  ("Telecom", "México"),           "KOF":  ("Bebidas", "México"),
+}
+
+# País de las internacionales que ya estaban en el universo del bot
+PAIS_EXTRA = {"TSM": "Taiwán", "ASML": "Países Bajos", "BABA": "China",
+              "MELI": "Argentina/Uruguay", "SHOP": "Canadá", "ABEV": "Brasil"}
+
+
+def sector_de(t: str) -> str:
+    if t in UNIVERSO_INTERNACIONAL:
+        return UNIVERSO_INTERNACIONAL[t][0]
+    return qc.SECTORES.get(t, "Otros")
+
+
+def pais_de(t: str) -> str:
+    if t in UNIVERSO_INTERNACIONAL:
+        return UNIVERSO_INTERNACIONAL[t][1]
+    return PAIS_EXTRA.get(t, "EE. UU.")
+
+
+_CACHE_FX: dict = {}
+
+def tipo_cambio(moneda: str) -> float | None:
+    """USD por 1 unidad de `moneda` (yfinance, último cierre)."""
+    if not moneda or moneda == "USD":
+        return 1.0
+    divisor = 1.0
+    if moneda == "GBp":                       # peniques
+        moneda, divisor = "GBP", 100.0
+    if moneda not in _CACHE_FX:
+        try:
+            df = qc._normalizar_columnas(qc.yf.download(f"{moneda}USD=X", period="5d",
+                                                        progress=False, auto_adjust=True))
+            _CACHE_FX[moneda] = float(df["Close"].dropna().iloc[-1])
+        except Exception as e:
+            print(f"Sin tipo de cambio para {moneda}: {e}")
+            _CACHE_FX[moneda] = None
+    fx = _CACHE_FX[moneda]
+    return None if fx is None else fx / divisor
+
+
+def convertir_a_usd(fila: dict, fx=tipo_cambio) -> dict:
+    """Convierte los montos de los estados financieros a USD (ratios no cambian)."""
+    moneda = fila.get("financialCurrency") or "USD"
+    if moneda == "USD":
+        return fila
+    tasa = fx(moneda)
+    if tasa is None:
+        return fila                     # queda en otra moneda → el filtro la descarta
+    fila = dict(fila)
+    for c in MONTOS:
+        if fila.get(c) is not None:
+            fila[c] = float(fila[c]) * tasa
+    if fila.get("fcf_hist"):
+        fila["fcf_hist"] = [float(x) * tasa for x in fila["fcf_hist"]]
+    # P/E propio con utilidad convertida (el de yfinance puede mezclar monedas)
+    if fila.get("netIncomeToCommon") and fila.get("marketCap"):
+        pe = float(fila["marketCap"]) / fila["netIncomeToCommon"]
+        fila["trailingPE"] = pe
+        fila["forwardPE"] = None
+    fila["moneda_reporte"] = moneda
+    fila["financialCurrency"] = "USD"
+    return fila
 
 
 # Misma empresa con dos clases de acción: se analiza solo una
 DUPLICADOS = {"GOOGL"}
 
 def universo_acciones() -> list:
-    return [t for t, s in qc.SECTORES.items()
+    eeuu = [t for t, s in qc.SECTORES.items()
             if t not in qc.ETFS and t not in DUPLICADOS and not t.endswith("-USD")
             and s not in SECTORES_EXCLUIDOS]
+    return eeuu + [t for t in UNIVERSO_INTERNACIONAL if t not in eeuu]
 
 
 def obtener_fundamentales(tickers: list = None, pausa: float = 0.3) -> pd.DataFrame:
@@ -72,7 +162,7 @@ def obtener_fundamentales(tickers: list = None, pausa: float = 0.3) -> pd.DataFr
                     fila["fcf_hist"] = [float(x) for x in cf.loc["Free Cash Flow"].dropna().iloc[:4]]
             except Exception:
                 pass
-            filas.append(fila)
+            filas.append(convertir_a_usd(fila))
         except Exception as e:
             print(f"Sin datos fundamentales para {t}: {e}")
         time.sleep(pausa)
@@ -89,7 +179,8 @@ def puntuar(df: pd.DataFrame, filtros: dict = FILTROS, pesos: dict = PESOS) -> p
     for c in NUMERICOS:
         if c in d:
             d[c] = _num(d[c])
-    d["sector"] = [qc.SECTORES.get(t, "Otros") for t in d.index]
+    d["sector"] = [sector_de(t) for t in d.index]
+    d["pais"] = [pais_de(t) for t in d.index]
     hist = d["fcf_hist"] if "fcf_hist" in d else pd.Series([None] * len(d), index=d.index)
     hist = [h if isinstance(h, (list, tuple)) and len(h) else [f] for h, f in zip(hist, d["freeCashflow"])]
     d["fcf_prom"] = [float(np.mean(h)) if all(pd.notna(h)) else np.nan for h in hist]
@@ -156,7 +247,7 @@ def resumen_accion(ranking: pd.DataFrame, t: str) -> dict:
     """Métricas clave para registrar la 'tesis' de compra."""
     f = ranking.loc[t]
     v = lambda x, k=1: None if pd.isna(x) else round(float(x) * k, 1)
-    return {"nombre": f.get("shortName"), "sector": f["sector"],
+    return {"nombre": f.get("shortName"), "sector": f["sector"], "pais": f.get("pais", "EE. UU."),
             "puntaje": round(float(f["puntaje"]), 3), "roe_pct": v(f["returnOnEquity"], 100),
             "margen_op_pct": v(f["operatingMargins"], 100), "fcf_yield_pct": v(f["fcf_yield"], 100),
             "pe": v(f["pe"]), "crec_ingresos_pct": v(f["revenueGrowth"], 100),
@@ -169,7 +260,8 @@ def texto_ranking(ranking: pd.DataFrame, n: int = 10, marcadas: list = None) -> 
     for i, t in enumerate(ranking.index[:n], 1):
         m = resumen_accion(ranking, t)
         marca = " *" if t in marcadas else ""
-        lineas.append(f"{i:2d}. {t}{marca} ({m['sector']}) punt {m['puntaje']:.2f} | "
+        lugar = m['sector'] if m['pais'] == "EE. UU." else f"{m['sector']}, {m['pais']}"
+        lineas.append(f"{i:2d}. {t}{marca} ({lugar}) punt {m['puntaje']:.2f} | "
                       f"ROE {m['roe_pct']}% | FCF yield {m['fcf_yield_pct']}% | "
                       f"P/E {m['pe']} | crec {m['crec_ingresos_pct']}%")
     if marcadas:

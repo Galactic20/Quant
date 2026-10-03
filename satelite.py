@@ -15,6 +15,14 @@ el mismo capital: si después de 12-18 meses no le gana, no vale la pena.
   - Viernes o ejecución manual: resumen frente a SPY y próximos resultados
     trimestrales de tus empresas.
 
+Stop loss / take profit (se ponen en eToro al comprar):
+  distancia = 2 x volatilidad esperada en 3 meses (de la volatilidad diaria
+  del último año), acotada entre 15% y 35%. SL = precio - distancia;
+  TP = precio + 2 x distancia (relación 2:1). En cada revisión trimestral el
+  SL de las que se mantienen solo sube (stop móvil trimestral). El bot revisa
+  cada cierre si se tocó algún nivel y te avisa; el efectivo liberado se
+  reinvierte en la siguiente revisión trimestral.
+
 Costes: acciones en eToro ~$1 al abrir y ~$1 al cerrar + spread.
 Estado en datos/satelite_modelo.json.
 """
@@ -23,6 +31,7 @@ import json
 import os
 from datetime import date
 
+import numpy as np
 import pandas as pd
 
 import fundamental as fu
@@ -39,6 +48,11 @@ CONFIG = {
     "COMISION":       1.0,     # USD por lado (eToro)
     "COSTE_PCT":      0.0005,  # spread por lado
     "MESES_REVISION": (3, 6, 9, 12),
+    "SL_MULT_VOL":    2.0,     # distancia del SL = 2 x volatilidad en 3 meses
+    "SL_MIN":         0.15,
+    "SL_MAX":         0.35,
+    "TP_RATIO":       2.0,     # TP a 2 veces la distancia del SL
+    "VOL_DEFECTO":    0.02,    # volatilidad diaria si no hay historial
 }
 
 
@@ -58,17 +72,27 @@ def guardar_modelo(modelo: dict, ruta: str = MODELO_FILE):
     with open(ruta, "w", encoding="utf-8") as f:
         json.dump(modelo, f, indent=2, ensure_ascii=False)
 
-def precios_actuales(tickers: list) -> dict:
-    """Último cierre de cada ticker (yfinance)."""
-    precios = {}
+def precios_actuales(tickers: list) -> tuple[dict, dict]:
+    """(último cierre, volatilidad diaria del último año) de cada ticker."""
+    precios, vols = {}, {}
     for t in tickers:
         try:
             df = qc._normalizar_columnas(
-                qc.yf.download(t, period="5d", progress=False, auto_adjust=True))
-            precios[t] = float(df["Close"].dropna().iloc[-1])
+                qc.yf.download(t, period="1y", progress=False, auto_adjust=True))
+            c = df["Close"].dropna()
+            precios[t] = float(c.iloc[-1])
+            vols[t] = float(np.log(c).diff().dropna().std())
         except Exception as e:
             print(f"Sin precio para {t}: {e}")
-    return precios
+    return precios, vols
+
+def niveles(precio: float, vol_diaria: float, cfg: dict = CONFIG) -> dict:
+    """Stop loss y take profit según la volatilidad de la acción."""
+    dist = cfg["SL_MULT_VOL"] * vol_diaria * np.sqrt(63)
+    dist = float(min(max(dist, cfg["SL_MIN"]), cfg["SL_MAX"]))
+    return {"stop_loss": round(precio * (1 - dist), 2),
+            "take_profit": round(precio * (1 + cfg["TP_RATIO"] * dist), 2),
+            "distancia_pct": round(dist * 100, 1)}
 
 def proximos_resultados(tickers: list) -> dict:
     """Fecha del próximo reporte trimestral (si yfinance la tiene)."""
@@ -107,20 +131,21 @@ def _vender(modelo, t, precio, fecha, motivo, cfg):
     modelo["historial"].append(orden)
     return orden
 
-def _comprar(modelo, t, usd, precio, fecha, ranking, cfg):
+def _comprar(modelo, t, usd, precio, fecha, ranking, cfg, vol):
     neto = usd - cfg["COMISION"]
     u = neto * (1 - cfg["COSTE_PCT"]) / precio
     modelo["unidades"][t] = modelo["unidades"].get(t, 0.0) + u
     modelo["efectivo"] -= usd
+    nv = niveles(precio, vol, cfg)
     modelo["tesis"][t] = {"fecha": fecha.isoformat(), "precio": round(precio, 2),
-                          **fu.resumen_accion(ranking, t)}
+                          **nv, **fu.resumen_accion(ranking, t)}
     orden = {"fecha": fecha.isoformat(), "accion": "COMPRAR", "ticker": t,
-             "usd": round(usd, 2), "precio": round(precio, 2), "unidades": round(u, 4)}
+             "usd": round(usd, 2), "precio": round(precio, 2), "unidades": round(u, 4), **nv}
     modelo["historial"].append(orden)
     return orden
 
 def revisar(modelo: dict, ranking: pd.DataFrame, precios: dict, fecha: date,
-            cfg: dict = CONFIG) -> list:
+            cfg: dict = CONFIG, vols: dict = None) -> list:
     """Revisión: vende las que ya no califican y compra reemplazos con el efectivo."""
     actuales = list(modelo["unidades"])
     elegidas = fu.seleccionar(ranking, cfg["N_ACCIONES"], cfg["MAX_POR_SECTOR"],
@@ -136,8 +161,43 @@ def revisar(modelo: dict, ranking: pd.DataFrame, precios: dict, fecha: date,
     if nuevas:
         monto = modelo["efectivo"] / len(nuevas)
         for t in nuevas:
-            ordenes.append(_comprar(modelo, t, monto, precios[t], fecha, ranking, cfg))
+            ordenes.append(_comprar(modelo, t, monto, precios[t], fecha, ranking, cfg,
+                                    (vols or {}).get(t, cfg["VOL_DEFECTO"])))
     return ordenes
+
+def subir_stops(modelo: dict, precios: dict, vols: dict, cfg: dict = CONFIG) -> list:
+    """Revisión trimestral: el SL de las que se mantienen solo sube."""
+    ajustes = []
+    for t in modelo["unidades"]:
+        te = modelo["tesis"].get(t, {})
+        nv = niveles(precios[t], vols.get(t, cfg["VOL_DEFECTO"]), cfg)
+        if te.get("stop_loss") is None or nv["stop_loss"] > te["stop_loss"]:
+            te["stop_loss"] = nv["stop_loss"]
+            te["take_profit"] = max(nv["take_profit"], te.get("take_profit") or 0)
+            ajustes.append(t)
+    return ajustes
+
+def vigilar_niveles(modelo: dict, precios: dict, vols: dict, fecha: date,
+                    cfg: dict = CONFIG) -> tuple[list, list]:
+    """
+    Cada cierre: asigna niveles a posiciones que no los tengan y vende las
+    que tocaron su SL o TP. Devuelve (ordenes, tickers_con_niveles_nuevos).
+    """
+    nuevos, ordenes = [], []
+    for t in list(modelo["unidades"]):
+        te = modelo["tesis"].setdefault(t, {})
+        if te.get("stop_loss") is None:
+            base = te.get("precio") or precios[t]
+            te.update(niveles(base, vols.get(t, cfg["VOL_DEFECTO"]), cfg))
+            nuevos.append(t)
+        p = precios.get(t)
+        if p is None:
+            continue
+        if p <= te["stop_loss"]:
+            ordenes.append(_vender(modelo, t, p, fecha, f"STOP LOSS (${te['stop_loss']})", cfg))
+        elif p >= te["take_profit"]:
+            ordenes.append(_vender(modelo, t, p, fecha, f"TAKE PROFIT (${te['take_profit']})", cfg))
+    return ordenes, nuevos
 
 
 # ======================================================================
@@ -157,6 +217,9 @@ def texto_ordenes(ordenes: list) -> str:
             extra = f" | {o['motivo']}"
             if o.get("pnl_pct") is not None:
                 extra += f" | {o['pnl_pct']:+.1f}% desde la compra"
+        if o["accion"] == "COMPRAR" and o.get("stop_loss"):
+            extra = (f"\n      SL {_usd(o['stop_loss'])} (-{o['distancia_pct']}%) | "
+                     f"TP {_usd(o['take_profit'])} (+{o['distancia_pct'] * CONFIG['TP_RATIO']:.1f}%)")
         lineas.append(f"  {o['accion']} {o['ticker']}: {_usd(o['usd'])} (~{o['unidades']:.4f} u.){extra}")
     return "\n".join(lineas)
 
@@ -188,18 +251,27 @@ def texto_estado(modelo: dict, precios: dict) -> str:
 # EJECUCIÓN (la llama bot_telegram.py en el modo CIERRE)
 # ======================================================================
 
+def texto_niveles(modelo: dict, tickers: list, titulo: str) -> str:
+    lineas = [titulo]
+    for t in tickers:
+        te = modelo["tesis"].get(t, {})
+        lineas.append(f"  {t}: SL {_usd(te['stop_loss'])} | TP {_usd(te['take_profit'])}")
+    return "\n".join(lineas)
+
+
 def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
              fundamentales: pd.DataFrame = None, precios: dict = None,
              resultados: dict = None, cfg: dict = CONFIG,
-             ruta: str = MODELO_FILE) -> str | None:
+             ruta: str = MODELO_FILE, vols: dict = None) -> str | None:
     modelo = cargar_modelo(ruta)
     fin_mes = es_ultimo_dia_habil_mes(hoy)
     mes = f"{hoy.year}-{hoy.month:02d}"
     revision = fin_mes and hoy.month in cfg["MESES_REVISION"]
     sep = "-" * 34
-
     necesita_ranking = (modelo is None or (fin_mes and modelo.get("ultimo_cierre_mes") != mes))
-    if not necesita_ranking and not (hoy.weekday() == 4 or manual):
+    hay_posiciones = bool(modelo and modelo["unidades"])
+
+    if not (necesita_ranking or hay_posiciones or hoy.weekday() == 4 or manual):
         print("Satelite: nada que informar hoy.")
         return None
 
@@ -215,34 +287,52 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
     if ranking is not None:
         tickers |= set(ranking.index[:cfg["BUFFER"]])
     if precios is None:
-        precios = precios_actuales(sorted(tickers))
+        precios, vols_desc = precios_actuales(sorted(tickers))
+        vols = {**vols_desc, **(vols or {})}
+    vols = vols or {}
     if ranking is not None:   # precio de respaldo del propio filtro
         for t in ranking.index:
             if t not in precios and pd.notna(ranking.at[t, "currentPrice"]):
                 precios[t] = float(ranking.at[t, "currentPrice"])
+
+    # ── Vigilancia diaria de stop loss / take profit ──
+    aviso = []
+    if modelo is not None:
+        disparadas, nuevos = vigilar_niveles(modelo, precios, vols, hoy, cfg)
+        if disparadas:
+            aviso += ["SATELITE - NIVEL ALCANZADO (eToro debio cerrar la posicion)",
+                      texto_ordenes(disparadas),
+                      "El efectivo se reinvierte en la proxima revision trimestral.", sep]
+        if nuevos:
+            aviso += [texto_niveles(modelo, nuevos,
+                                    "SATELITE - Pon estos niveles en eToro (posiciones actuales):"), sep]
+        if disparadas or nuevos:
+            guardar_modelo(modelo, ruta)
 
     if modelo is None:
         modelo = {"inicio": hoy.isoformat(), "capital_inicial": cfg["CAPITAL"],
                   "efectivo": cfg["CAPITAL"], "unidades": {}, "tesis": {},
                   "referencia_spy_unidades": cfg["CAPITAL"] / precios["SPY"],
                   "ultimo_cierre_mes": mes if fin_mes else None, "historial": []}
-        ordenes = revisar(modelo, ranking, precios, hoy, cfg)
+        ordenes = revisar(modelo, ranking, precios, hoy, cfg, vols)
         guardar_modelo(modelo, ruta)
-        texto = "\n".join([f"SATELITE FUNDAMENTAL - INICIO ({_usd(cfg['CAPITAL'])} virtuales)", sep,
-                           texto_ordenes(ordenes), sep,
-                           texto_tesis(modelo, list(modelo["unidades"])), sep,
-                           fu.texto_ranking(ranking, 10, list(modelo["unidades"]))])
+        partes = [f"SATELITE FUNDAMENTAL - INICIO ({_usd(cfg['CAPITAL'])} virtuales)", sep,
+                  texto_ordenes(ordenes), sep,
+                  texto_tesis(modelo, list(modelo["unidades"])), sep,
+                  fu.texto_ranking(ranking, 10, list(modelo["unidades"]))]
     elif ranking is not None and revision:
-        ordenes = revisar(modelo, ranking, precios, hoy, cfg)
+        ordenes = revisar(modelo, ranking, precios, hoy, cfg, vols)
+        nuevas = [o["ticker"] for o in ordenes if o["accion"] == "COMPRAR"]
+        ajustes = [t for t in subir_stops(modelo, precios, vols, cfg) if t not in nuevas]
         modelo["ultimo_cierre_mes"] = mes
         guardar_modelo(modelo, ruta)
-        nuevas = [o["ticker"] for o in ordenes if o["accion"] == "COMPRAR"]
-        partes = [f"SATELITE - REVISION TRIMESTRAL", sep, texto_ordenes(ordenes)]
+        partes = ["SATELITE - REVISION TRIMESTRAL", sep, texto_ordenes(ordenes)]
         if nuevas:
             partes += [sep, texto_tesis(modelo, nuevas)]
+        if ajustes:
+            partes += [sep, texto_niveles(modelo, ajustes, "Sube el stop loss en eToro:")]
         partes += [sep, texto_estado(modelo, precios), sep,
                    fu.texto_ranking(ranking, 10, list(modelo["unidades"]))]
-        texto = "\n".join(partes)
     elif ranking is not None:
         modelo["ultimo_cierre_mes"] = mes
         guardar_modelo(modelo, ruta)
@@ -253,15 +343,21 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
             partes += [sep, "Atencion: fuera del top " + str(cfg["BUFFER"]) + ": " + ", ".join(fuera)
                        + ". Se venderian en la proxima revision si siguen asi."]
         partes += [sep, texto_estado(modelo, precios)]
-        texto = "\n".join(partes)
-    else:
+    elif hoy.weekday() == 4 or manual:
         fechas = resultados if resultados is not None else proximos_resultados(list(modelo["unidades"]))
         partes = ["SATELITE - RESUMEN SEMANAL", sep, texto_estado(modelo, precios)]
+        if modelo["unidades"]:
+            partes += [sep, texto_niveles(modelo, sorted(modelo["unidades"]), "Niveles vigentes:")]
         if fechas:
             partes += [sep, "Proximos resultados trimestrales:"]
             partes += [f"  {t}: {f}" for t, f in sorted(fechas.items(), key=lambda kv: kv[1])]
-        texto = "\n".join(partes)
+    else:
+        partes = []
 
+    texto = "\n".join(aviso + partes).strip()
+    if not texto:
+        print("Satelite: nada que informar hoy.")
+        return None
     enviar(texto)
     print(texto)
     return texto

@@ -96,10 +96,15 @@ def regla_spy_mas_b(peso_spy: float = 0.5):
 
 def simular(precios: pd.DataFrame, regla, capital: float = 2380,
             aporte_mensual: float = 0.0, coste_pct: float = COSTE_PCT_ETF,
-            inicio=None) -> dict:
+            inicio=None, stop_pct: float = None, tp_pct: float = None) -> dict:
     """
     Devuelve {"valor": Serie en USD, "nav": valor por participación (base 1),
-    "operaciones": n, "costes": USD, "aportado": USD}.
+    "operaciones": n, "costes": USD, "aportado": USD, "stops": n, "tps": n}.
+
+    stop_pct: stop loss móvil (desde el máximo de cierre desde la compra).
+    tp_pct:   take profit desde el precio de compra.
+    Si se tocan (al cierre), la posición pasa a efectivo hasta el siguiente
+    rebalanceo mensual, que vuelve a comprarla si la regla la sigue eligiendo.
     """
     precios = precios.dropna()
     fechas = precios.index
@@ -115,6 +120,10 @@ def simular(precios: pd.DataFrame, regla, capital: float = 2380,
     objetivo = None
     pendiente = None
     n_ops, costes, aportado = 0, 0.0, capital
+    n_stops, n_tps = 0, 0
+    entrada: dict = {}
+    pico: dict = {}
+    forzar = False
     valores, navs = [], []
 
     def valor_cartera(fecha):
@@ -135,6 +144,20 @@ def simular(precios: pd.DataFrame, regla, capital: float = 2380,
             n_ops += 1
         for t in [t for t, u in unidades.items() if abs(u) < 1e-12]:
             del unidades[t]
+        for t in list(entrada):
+            if t not in unidades:
+                entrada.pop(t); pico.pop(t, None)
+        for t in unidades:
+            if t not in entrada:
+                entrada[t] = pico[t] = precios.at[fecha, t]
+
+    def vender_todo(fecha, t):
+        nonlocal cash, n_ops, costes
+        bruto = unidades.pop(t) * precios.at[fecha, t]
+        cash += bruto * (1 - coste_pct)
+        costes += bruto * coste_pct
+        n_ops += 1
+        entrada.pop(t, None); pico.pop(t, None)
 
     for i, fecha in enumerate(fechas):
         if i == 0:
@@ -148,10 +171,19 @@ def simular(precios: pd.DataFrame, regla, capital: float = 2380,
                 participaciones += aporte_mensual / nav_hoy
                 rebalancear(fecha, objetivo)
             if pendiente is not None:
-                if pendiente != objetivo:
+                if pendiente != objetivo or forzar:
                     objetivo = pendiente
                     rebalancear(fecha, objetivo)
+                    forzar = False
                 pendiente = None
+        # Stop loss móvil / take profit al cierre
+        for t in list(unidades):
+            p = precios.at[fecha, t]
+            pico[t] = max(pico.get(t, p), p)
+            if stop_pct and p <= pico[t] * (1 - stop_pct):
+                vender_todo(fecha, t); n_stops += 1; forzar = True
+            elif tp_pct and p >= entrada.get(t, p) * (1 + tp_pct):
+                vender_todo(fecha, t); n_tps += 1; forzar = True
         if fecha in fin_mes:
             pendiente = regla(precios.loc[:fecha])
         v = valor_cartera(fecha)
@@ -161,12 +193,22 @@ def simular(precios: pd.DataFrame, regla, capital: float = 2380,
     return {"valor": pd.Series(valores, index=fechas),
             "nav": pd.Series(navs, index=fechas),
             "operaciones": n_ops, "costes": round(costes, 2),
-            "aportado": round(aportado, 2)}
+            "aportado": round(aportado, 2), "stops": n_stops, "tps": n_tps}
 
 
 # ======================================================================
 # COMPARACIÓN Y REPORTE
 # ======================================================================
+
+VARIANTES_STOP = {
+    "Sin stop":            {},
+    "Stop movil 10%":      {"stop_pct": 0.10},
+    "Stop movil 15%":      {"stop_pct": 0.15},
+    "Stop movil 20%":      {"stop_pct": 0.20},
+    "Stop movil 25%":      {"stop_pct": 0.25},
+    "Take profit 20%":     {"tp_pct": 0.20},
+    "Stop 15% + TP 30%":   {"stop_pct": 0.15, "tp_pct": 0.30},
+}
 
 ESTRATEGIAS = {
     "SPY (comprar y mantener)":  regla_comprar_mantener("SPY"),
@@ -258,6 +300,22 @@ def main():
         tabla_ap, _ = comparar(precios, args.capital, args.aporte, inicio_bot)
         txt += [f"## 3. Periodo del bot con aporte de ${args.aporte:,.0f} al mes",
                 "", tabla_ap.to_markdown(index=False), ""]
+
+    # 4. Stop loss / take profit sobre la cartera del bot (50/50)
+    filas = []
+    for nombre, kw in VARIANTES_STOP.items():
+        for etiqueta, ini in (("larga", inicio_largo), ("bot", inicio_bot)):
+            r = simular(precios, regla_spy_mas_b(0.5), args.capital, 0.0, inicio=ini, **kw)
+            m = bt.metricas(r["nav"])
+            filas.append({"Variante": nombre, "Periodo": etiqueta, "CAGR %": m["cagr_pct"],
+                          "Máx. caída %": m["max_drawdown_pct"], "Sharpe": m["sharpe"],
+                          "Stops": r["stops"], "Take profits": r["tps"],
+                          "Capital final ($)": round(float(r["valor"].iloc[-1]), 0)})
+    tabla_sl = pd.DataFrame(filas).sort_values(["Periodo", "Variante"])
+    txt += ["## 4. Stop loss / take profit en la cartera 50% SPY + 50% B (sin aportes)",
+            "Stop móvil desde el máximo; take profit desde la compra; al tocarse se pasa a "
+            "efectivo hasta el siguiente rebalanceo mensual.", "",
+            tabla_sl.to_markdown(index=False), ""]
 
     txt += ["### Retorno por año calendario, historia larga (%)", "", anual.to_markdown(), ""]
     texto = "\n".join(txt)
