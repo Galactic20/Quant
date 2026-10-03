@@ -6,6 +6,14 @@ name: Backtest
 on:
   workflow_dispatch:
     inputs:
+      estudio:
+        description: 'bot = backtest del bot Quant; alternativas = SPY vs A (tendencia) vs B (momentum) vs bot'
+        type: choice
+        options: [bot, alternativas]
+        default: bot
+      aporte:
+        description: 'Solo alternativas: aporte mensual en USD'
+        default: '100'
       periodo:
         description: 'Historia a descargar (yfinance: 5y, 10y, max)'
         default: '10y'
@@ -42,7 +50,16 @@ jobs:
           WALK_FORWARD: ${{ github.event.inputs.walk_forward }}
           CAPITAL: ${{ github.event.inputs.capital }}
           SPREAD: ${{ github.event.inputs.spread }}
+          ESTUDIO: ${{ github.event.inputs.estudio }}
+          APORTE: ${{ github.event.inputs.aporte }}
         run: |
+          if [ "$ESTUDIO" = "alternativas" ]; then
+            ARGS="--salida resultados --aporte ${APORTE:-100}"
+            if [ -n "$CAPITAL" ]; then ARGS="$ARGS --capital $CAPITAL"; fi
+            python estrategias.py $ARGS
+            cat resultados/estrategias.md >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           ARGS="--periodo ${PERIODO:-10y} --salida resultados"
           if [ "$WALK_FORWARD" = "true" ]; then ARGS="$ARGS --walk-forward"; fi
           if [ -n "$CAPITAL" ]; then ARGS="$ARGS --capital $CAPITAL"; fi
