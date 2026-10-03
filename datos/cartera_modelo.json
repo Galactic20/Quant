@@ -1,0 +1,36 @@
+{
+  "estrategia": "50% SPY + 50% B",
+  "inicio": "2026-10-03",
+  "efectivo": 0.010599999999612919,
+  "unidades": {
+    "QQQ": 1.5867552134296559,
+    "SPY": 1.5453978189313662
+  },
+  "aportado": 2380,
+  "participaciones": 2380,
+  "referencia_spy_unidades": 3.0923548083543393,
+  "asignacion": {
+    "SPY": 0.5,
+    "QQQ": 0.5
+  },
+  "ultimo_rebalanceo": "2026-10-03",
+  "ultimo_cierre_mes": null,
+  "historial": [
+    {
+      "fecha": "2026-10-03",
+      "ticker": "QQQ",
+      "accion": "COMPRAR",
+      "usd": 1189.4,
+      "precio": 749.58,
+      "unidades": 1.5868
+    },
+    {
+      "fecha": "2026-10-03",
+      "ticker": "SPY",
+      "accion": "COMPRAR",
+      "usd": 1189.4,
+      "precio": 769.64,
+      "unidades": 1.5454
+    }
+  ]
+}
