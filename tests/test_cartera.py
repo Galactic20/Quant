@@ -22,9 +22,12 @@ def hist():
     return p
 
 
-def correr(hoy, hist, ruta, manual=False):
+CFG = {**ca.CONFIG, "CAPITAL_INICIAL": 2380}
+
+
+def correr(hoy, hist, ruta, manual=False, cfg=CFG):
     enviados = []
-    texto = ca.ejecutar(hoy, manual=manual, enviar=enviados.append,
+    texto = ca.ejecutar(hoy, manual=manual, enviar=enviados.append, cfg=cfg,
                         precios_hist=hist, ruta=str(ruta))
     return texto, enviados
 
@@ -87,7 +90,7 @@ def test_resumen_manual_compara_con_spy(hist, tmp_path):
 
 
 def test_aporte_no_cambia_el_rendimiento():
-    m = ca.nuevo_modelo(date(2026, 1, 1), 100.0)
+    m = ca.nuevo_modelo(date(2026, 1, 1), 100.0, CFG)
     p = {"SPY": 100.0}
     ca.rebalancear(m, {"SPY": 1.0}, p, date(2026, 1, 1), {**ca.CONFIG, "COSTE_PCT": 0.0})
     p2 = {"SPY": 110.0}
@@ -103,3 +106,12 @@ def test_inicio_en_fin_de_mes_no_duplica_aporte(hist, tmp_path):
     texto, _ = correr(date(2026, 10, 30), hist, ruta)
     assert "REBALANCEO" not in texto
     assert ca.cargar_modelo(str(ruta))["aportado"] == 2380
+
+
+def test_sin_capital_definido_queda_en_pausa(hist, tmp_path):
+    ruta = tmp_path / "modelo.json"
+    texto, enviados = correr(date(2026, 10, 30), hist, ruta, cfg=ca.CONFIG)
+    assert texto is None and enviados == [] and ca.cargar_modelo(str(ruta)) is None
+    texto, enviados = correr(date(2026, 10, 14), hist, ruta, manual=True, cfg=ca.CONFIG)
+    assert "EN PAUSA" in texto and len(enviados) == 1
+    assert ca.cargar_modelo(str(ruta)) is None

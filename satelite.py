@@ -2,6 +2,10 @@
 """
 CARTERA SATÉLITE — acciones elegidas por análisis fundamental
 
+MODO VIRTUAL (aprendizaje): se opera solo en la cartera virtual de eToro. El
+backtest con SimFin (2021-2025) rindió muy por debajo de SPY; se reevalúa
+con los resultados reales de la cartera virtual.
+
 Complementa a la cartera principal (50% SPY + 50% B). Se mide contra SPY con
 el mismo capital: si después de 12-18 meses no le gana, no vale la pena.
 
@@ -300,12 +304,12 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
     if modelo is not None:
         disparadas, nuevos = vigilar_niveles(modelo, precios, vols, hoy, cfg)
         if disparadas:
-            aviso += ["SATELITE - NIVEL ALCANZADO (eToro debio cerrar la posicion)",
+            aviso += ["SATELITE VIRTUAL - NIVEL ALCANZADO (eToro debio cerrar la posicion)",
                       texto_ordenes(disparadas),
                       "El efectivo se reinvierte en la proxima revision trimestral.", sep]
         if nuevos:
             aviso += [texto_niveles(modelo, nuevos,
-                                    "SATELITE - Pon estos niveles en eToro (posiciones actuales):"), sep]
+                                    "SATELITE VIRTUAL - Pon estos niveles en eToro (posiciones actuales):"), sep]
         if disparadas or nuevos:
             guardar_modelo(modelo, ruta)
 
@@ -316,7 +320,7 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
                   "ultimo_cierre_mes": mes if fin_mes else None, "historial": []}
         ordenes = revisar(modelo, ranking, precios, hoy, cfg, vols)
         guardar_modelo(modelo, ruta)
-        partes = [f"SATELITE FUNDAMENTAL - INICIO ({_usd(cfg['CAPITAL'])} virtuales)", sep,
+        partes = [f"SATELITE VIRTUAL (aprendizaje) - INICIO ({_usd(cfg['CAPITAL'])} virtuales)", sep,
                   texto_ordenes(ordenes), sep,
                   texto_tesis(modelo, list(modelo["unidades"])), sep,
                   fu.texto_ranking(ranking, 10, list(modelo["unidades"]))]
@@ -326,7 +330,7 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
         ajustes = [t for t in subir_stops(modelo, precios, vols, cfg) if t not in nuevas]
         modelo["ultimo_cierre_mes"] = mes
         guardar_modelo(modelo, ruta)
-        partes = ["SATELITE - REVISION TRIMESTRAL", sep, texto_ordenes(ordenes)]
+        partes = ["SATELITE VIRTUAL - REVISION TRIMESTRAL", sep, texto_ordenes(ordenes)]
         if nuevas:
             partes += [sep, texto_tesis(modelo, nuevas)]
         if ajustes:
@@ -337,7 +341,7 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
         modelo["ultimo_cierre_mes"] = mes
         guardar_modelo(modelo, ruta)
         fuera = [t for t in modelo["unidades"] if t not in list(ranking.index[:cfg["BUFFER"]])]
-        partes = ["SATELITE - REPORTE MENSUAL (sin operar; la revision es trimestral)", sep,
+        partes = ["SATELITE VIRTUAL - REPORTE MENSUAL (sin operar; la revision es trimestral)", sep,
                   fu.texto_ranking(ranking, 10, list(modelo["unidades"]))]
         if fuera:
             partes += [sep, "Atencion: fuera del top " + str(cfg["BUFFER"]) + ": " + ", ".join(fuera)
@@ -345,7 +349,7 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
         partes += [sep, texto_estado(modelo, precios)]
     elif hoy.weekday() == 4 or manual:
         fechas = resultados if resultados is not None else proximos_resultados(list(modelo["unidades"]))
-        partes = ["SATELITE - RESUMEN SEMANAL", sep, texto_estado(modelo, precios)]
+        partes = ["SATELITE VIRTUAL - RESUMEN SEMANAL", sep, texto_estado(modelo, precios)]
         if modelo["unidades"]:
             partes += [sep, texto_niveles(modelo, sorted(modelo["unidades"]), "Niveles vigentes:")]
         if fechas:
