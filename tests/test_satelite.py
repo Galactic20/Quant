@@ -44,11 +44,14 @@ def test_filtros_descartan_y_explican():
     df = fundamentales(**{
         "AAPL": {"freeCashflow": -1e9}, "MSFT": {"returnOnEquity": 0.05},
         "GOOG": {"marketCap": 5e9}, "NVDA": {"debtToEquity": 350},
-        "AMD": {"trailingPE": -10, "forwardPE": -5}})
+        "AMD": {"trailingPE": -10, "forwardPE": -5},
+        "COST": {"fcf_hist": [5e9, -1e9, 4e9]}, "KO": {"financialCurrency": "BRL"}})
     r = fu.puntuar(df)
     descartadas = r.attrs["descartadas"]
-    assert {"AAPL", "MSFT", "GOOG", "NVDA", "AMD"} <= set(descartadas)
+    assert {"AAPL", "MSFT", "GOOG", "NVDA", "AMD", "COST", "KO"} <= set(descartadas)
     assert "FCF negativo" in descartadas["AAPL"]
+    assert "FCF negativo" in descartadas["COST"]          # un año negativo en el historial
+    assert "otra moneda" in descartadas["KO"]
     assert "deuda alta" in descartadas["NVDA"]
     assert not set(descartadas) & set(r.index)
     assert r["puntaje"].is_monotonic_decreasing
@@ -135,3 +138,13 @@ def test_resumen_semanal_y_dia_normal(tmp_path, monkeypatch):
     assert "RESUMEN SEMANAL" in texto and "2026-10-28" in texto and "vs SPY" in texto
     texto, enviados = correr(date(2026, 10, 14), ruta, df)  # miércoles normal
     assert texto is None and enviados == []
+
+
+def test_fcf_promedio_suaviza_el_pico_ciclico():
+    # Mismo FCF del último año, pero AMD tuvo años previos mucho peores:
+    # su rendimiento de flujo libre promedio debe ser menor que el de CAT.
+    base = {"marketCap": 1e11, "freeCashflow": 1e10, "totalRevenue": 5e10}
+    df = fundamentales(AMD={**base, "fcf_hist": [1e10, 1e9, 5e8]},
+                       CAT={**base, "fcf_hist": [1e10, 9e9, 9.5e9]})
+    r = fu.puntuar(df)
+    assert r.at["AMD", "fcf_yield"] < r.at["CAT", "fcf_yield"]

@@ -7,15 +7,18 @@ yfinance (no hay histórico "punto en el tiempo" gratuito, así que esto NO se
 puede validar con backtest: se valida hacia adelante con la cartera satélite).
 
   Filtros mínimos (descartan la acción):
-    capitalización ≥ $10B · flujo de caja libre > 0 · ROE ≥ 10%
-    deuda/patrimonio ≤ 2x · P/E positivo
+    capitalización ≥ $10B · flujo de caja libre > 0 en TODOS los años
+    disponibles (hasta 4) · ROE ≥ 10% · deuda/patrimonio ≤ 2x · P/E positivo
+    · estados financieros en USD (en los ADRs yfinance mezcla moneda local
+      con capitalización en USD y las razones salen distorsionadas)
     Se excluyen bancos/finanzas, REITs, utilities, ETFs y cripto: sus
     métricas de deuda y flujo de caja no son comparables con el resto.
 
   Puntaje (percentil dentro del universo, 0 a 1):
     calidad      50%: ROE, margen operativo, margen de flujo libre, poca deuda
-    valoración   35%: rendimiento de flujo libre (FCF/cap.), rendimiento de
-                      ganancias (1/P/E)
+    valoración   35%: rendimiento de flujo libre PROMEDIO de varios años
+                      (evita que un año récord de una cíclica la haga
+                      parecer barata) y rendimiento de ganancias (1/P/E)
     crecimiento  15%: crecimiento de ingresos
 """
 
@@ -42,7 +45,8 @@ PESOS = {"calidad": 0.50, "valor": 0.35, "crecimiento": 0.15}
 
 CAMPOS = ["shortName", "marketCap", "currentPrice", "returnOnEquity",
           "operatingMargins", "freeCashflow", "totalRevenue", "debtToEquity",
-          "trailingPE", "forwardPE", "revenueGrowth"]
+          "trailingPE", "forwardPE", "revenueGrowth", "financialCurrency"]
+NUMERICOS = [c for c in CAMPOS if c not in ("shortName", "financialCurrency")]
 
 
 def universo_acciones() -> list:
@@ -55,8 +59,16 @@ def obtener_fundamentales(tickers: list = None, pausa: float = 0.3) -> pd.DataFr
     filas = []
     for t in tickers or universo_acciones():
         try:
-            info = qc.yf.Ticker(t).info
-            filas.append({"ticker": t, **{c: info.get(c) for c in CAMPOS}})
+            tk = qc.yf.Ticker(t)
+            info = tk.info
+            fila = {"ticker": t, **{c: info.get(c) for c in CAMPOS}}
+            try:
+                cf = tk.cashflow   # anual, columnas = años (más reciente primero)
+                if cf is not None and "Free Cash Flow" in cf.index:
+                    fila["fcf_hist"] = [float(x) for x in cf.loc["Free Cash Flow"].dropna().iloc[:4]]
+            except Exception:
+                pass
+            filas.append(fila)
         except Exception as e:
             print(f"Sin datos fundamentales para {t}: {e}")
         time.sleep(pausa)
@@ -70,19 +82,26 @@ def _num(s: pd.Series) -> pd.Series:
 def puntuar(df: pd.DataFrame, filtros: dict = FILTROS, pesos: dict = PESOS) -> pd.DataFrame:
     """Agrega métricas, aplica filtros y devuelve el ranking (mejor primero)."""
     d = df.copy()
-    for c in CAMPOS[1:]:
+    for c in NUMERICOS:
         if c in d:
             d[c] = _num(d[c])
     d["sector"] = [qc.SECTORES.get(t, "Otros") for t in d.index]
-    d["fcf_yield"] = d["freeCashflow"] / d["marketCap"]
-    d["fcf_margen"] = d["freeCashflow"] / d["totalRevenue"]
+    hist = d["fcf_hist"] if "fcf_hist" in d else pd.Series([None] * len(d), index=d.index)
+    hist = [h if isinstance(h, (list, tuple)) and len(h) else [f] for h, f in zip(hist, d["freeCashflow"])]
+    d["fcf_prom"] = [float(np.mean(h)) if all(pd.notna(h)) else np.nan for h in hist]
+    d["fcf_min"] = [float(np.min(h)) if all(pd.notna(h)) else np.nan for h in hist]
+    d["fcf_anios"] = [len(h) for h in hist]
+    d["fcf_yield"] = d["fcf_prom"] / d["marketCap"]
+    d["fcf_margen"] = d["fcf_prom"] / d["totalRevenue"]
+    moneda = d["financialCurrency"] if "financialCurrency" in d else pd.Series("USD", index=d.index)
     pe = d["forwardPE"].where(d["forwardPE"] > 0, d["trailingPE"])
     d["pe"] = pe
     d["earnings_yield"] = 1 / pe
 
     motivo = pd.Series("", index=d.index)
     motivo[d["marketCap"].isna() | (d["marketCap"] < filtros["CAP_MINIMA"])] += "cap. pequeña; "
-    motivo[~(d["freeCashflow"] > 0)] += "FCF negativo; "
+    motivo[~(d["freeCashflow"] > 0) | ~(d["fcf_min"] > 0)] += "FCF negativo en algun año; "
+    motivo[~moneda.fillna("USD").isin(["USD"])] += "reporta en otra moneda; "
     motivo[~(d["returnOnEquity"] >= filtros["ROE_MINIMO"])] += "ROE bajo; "
     motivo[~(d["debtToEquity"].fillna(0) <= filtros["DEUDA_MAXIMA"])] += "deuda alta; "
     motivo[~(pe > 0)] += "P/E no positivo; "
