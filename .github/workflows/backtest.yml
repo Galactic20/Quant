@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       estudio:
-        description: 'bot = backtest del bot Quant; alternativas = SPY vs A (tendencia) vs B (momentum) vs bot'
+        description: 'bot = backtest del bot Quant; alternativas = SPY vs A vs B vs bot; fundamental = ranking actual del satelite'
         type: choice
-        options: [bot, alternativas]
+        options: [bot, alternativas, fundamental]
         default: bot
       aporte:
         description: 'Solo alternativas: aporte mensual en USD'
@@ -53,6 +53,12 @@ jobs:
           ESTUDIO: ${{ github.event.inputs.estudio }}
           APORTE: ${{ github.event.inputs.aporte }}
         run: |
+          if [ "$ESTUDIO" = "fundamental" ]; then
+            mkdir -p resultados
+            python fundamental.py | tee resultados/fundamental.txt
+            { echo '```'; cat resultados/fundamental.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           if [ "$ESTUDIO" = "alternativas" ]; then
             ARGS="--salida resultados --aporte ${APORTE:-100}"
             if [ -n "$CAPITAL" ]; then ARGS="$ARGS --capital $CAPITAL"; fi

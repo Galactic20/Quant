@@ -1,6 +1,8 @@
 # bot_telegram.py v3.0
 # Estrategia por defecto (ESTRATEGIA_BOT=cartera): cartera modelo 50% SPY +
 # 50% estrategia B (momentum entre 5 ETFs). Ver cartera.py.
+# Ademas, cartera satelite de analisis fundamental (satelite.py); se
+# desactiva con SATELITE=0.
 #   CIERRE (3:55 PM NY): rebalanceo el ultimo dia habil del mes y resumen
 #                        los viernes (o en ejecucion manual).
 #   APERTURA:            sin acciones en este modo.
@@ -329,7 +331,16 @@ if __name__ == "__main__":
         import cartera
         manual = os.getenv("MODO_MANUAL", "").strip() != ""
         if modo == "CIERRE" or manual:
-            cartera.ejecutar(datetime.now(NY).date(), manual=manual)
+            hoy = datetime.now(NY).date()
+            cartera.ejecutar(hoy, manual=manual)
+            if os.getenv("SATELITE", "1").strip() != "0":
+                # El satelite no debe impedir el mensaje de la cartera principal
+                try:
+                    import satelite
+                    satelite.ejecutar(hoy, manual=manual)
+                except Exception as e:
+                    print("Error en satelite: " + str(e))
+                    enviar_telegram("Satelite fundamental: error al ejecutar (" + str(e)[:200] + ")")
         else:
             print("Apertura: sin acciones en modo cartera.")
     print("Proceso finalizado.")
