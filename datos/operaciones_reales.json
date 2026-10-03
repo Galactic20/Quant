@@ -1,0 +1,225 @@
+{
+  "_nota": "Operaciones cerradas en eToro. origen: 'bot' = sistema Quant, 'pre_sistema' = posiciones compradas antes del bot. Agrega nuevas operaciones al final de la lista.",
+  "operaciones": [
+    {
+      "ticker": "META",
+      "fecha_cierre": "2026-02-09",
+      "precio_entrada": 639.88,
+      "precio_salida": 667.0,
+      "unidades": 0.07814,
+      "invertido": 50.0,
+      "pnl": 2.12,
+      "origen": "bot",
+      "motivo": null
+    },
+    {
+      "ticker": "QQQ",
+      "fecha_cierre": "2026-02-05",
+      "precio_entrada": 624.1301,
+      "precio_salida": 596.0701,
+      "unidades": 0.64089,
+      "invertido": 400.0,
+      "pnl": -17.98,
+      "origen": "bot",
+      "motivo": null
+    },
+    {
+      "ticker": "QQQ",
+      "fecha_cierre": "2026-01-15",
+      "precio_entrada": 611.96,
+      "precio_salida": 624.96,
+      "unidades": 0.65364,
+      "invertido": 400.0,
+      "pnl": 8.5,
+      "origen": "bot",
+      "motivo": null
+    },
+    {
+      "ticker": "TSM",
+      "fecha_cierre": "2026-02-11",
+      "precio_entrada": 196.94,
+      "precio_salida": 376.3101,
+      "unidades": 0.2547,
+      "invertido": 50.16,
+      "pnl": 45.69,
+      "origen": "pre_sistema",
+      "motivo": null
+    },
+    {
+      "ticker": "TSM",
+      "fecha_cierre": "2026-02-11",
+      "precio_entrada": 196.31,
+      "precio_salida": 376.29,
+      "unidades": 0.2547,
+      "invertido": 50.0,
+      "pnl": 45.84,
+      "origen": "pre_sistema",
+      "motivo": null
+    },
+    {
+      "ticker": "ON",
+      "fecha_cierre": "2026-02-11",
+      "precio_entrada": 42.95,
+      "precio_salida": 70.75,
+      "unidades": 1.16414,
+      "invertido": 50.0,
+      "pnl": 32.36,
+      "origen": "pre_sistema",
+      "motivo": null
+    },
+    {
+      "ticker": "GUSH",
+      "fecha_cierre": "2026-02-11",
+      "precio_entrada": 19.82,
+      "precio_salida": 29.83,
+      "unidades": 3.02725,
+      "invertido": 60.0,
+      "pnl": 30.3,
+      "origen": "pre_sistema",
+      "motivo": null
+    },
+    {
+      "ticker": "IEF",
+      "fecha_cierre": "2026-02-17",
+      "precio_entrada": 96.09,
+      "precio_salida": 97.27,
+      "unidades": 4.16276,
+      "invertido": 400.0,
+      "pnl": 4.91,
+      "origen": "bot",
+      "motivo": null
+    },
+    {
+      "ticker": "VTI",
+      "fecha_cierre": "2026-02-17",
+      "precio_entrada": 336.28,
+      "precio_salida": 333.79,
+      "unidades": 0.89211,
+      "invertido": 300.0,
+      "pnl": -2.22,
+      "origen": "bot",
+      "motivo": null
+    },
+    {
+      "ticker": "BABA",
+      "fecha_cierre": "2026-02-26",
+      "precio_entrada": 147.89,
+      "precio_salida": 147.59,
+      "unidades": 2.09,
+      "invertido": 309.09,
+      "pnl": -0.63,
+      "origen": "bot",
+      "motivo": null
+    },
+    {
+      "ticker": "JPM",
+      "fecha_cierre": "2026-02-27",
+      "precio_entrada": 299.1401,
+      "precio_salida": 298.23,
+      "unidades": 1.27,
+      "invertido": 379.91,
+      "pnl": -1.16,
+      "origen": "bot",
+      "motivo": null
+    },
+    {
+      "ticker": "BA",
+      "fecha_cierre": "2026-02-27",
+      "precio_entrada": 227.09,
+      "precio_salida": 225.77,
+      "unidades": 1.0,
+      "invertido": 227.09,
+      "pnl": -1.32,
+      "origen": "bot",
+      "motivo": null
+    },
+    {
+      "ticker": "BAC",
+      "fecha_cierre": "2026-02-27",
+      "precio_entrada": 49.94,
+      "precio_salida": 49.37,
+      "unidades": 5.0,
+      "invertido": 249.7,
+      "pnl": -2.85,
+      "origen": "bot",
+      "motivo": null
+    },
+    {
+      "ticker": "PLD",
+      "fecha_cierre": "2026-07-23",
+      "precio_entrada": null,
+      "precio_salida": null,
+      "unidades": null,
+      "invertido": 282.16,
+      "pnl": -11.14,
+      "origen": "bot",
+      "motivo": "STOP_LOSS"
+    },
+    {
+      "ticker": "VTI",
+      "fecha_cierre": null,
+      "precio_entrada": null,
+      "precio_salida": null,
+      "unidades": null,
+      "invertido": 300.0,
+      "pnl": 1.39,
+      "origen": "bot",
+      "motivo": "STOP_LOSS"
+    },
+    {
+      "ticker": "QQQ",
+      "fecha_cierre": null,
+      "precio_entrada": null,
+      "precio_salida": null,
+      "unidades": null,
+      "invertido": 511.49,
+      "pnl": -10.93,
+      "origen": "bot",
+      "motivo": "STOP_LOSS"
+    },
+    {
+      "ticker": "GOOG",
+      "fecha_cierre": null,
+      "precio_entrada": null,
+      "precio_salida": null,
+      "unidades": null,
+      "invertido": 259.46,
+      "pnl": -9.37,
+      "origen": "bot",
+      "motivo": "STOP_LOSS"
+    },
+    {
+      "ticker": "AVGO",
+      "fecha_cierre": null,
+      "precio_entrada": null,
+      "precio_salida": null,
+      "unidades": null,
+      "invertido": 312.75,
+      "pnl": 0.35,
+      "origen": "bot",
+      "motivo": null
+    },
+    {
+      "ticker": "TSLA",
+      "fecha_cierre": null,
+      "precio_entrada": null,
+      "precio_salida": null,
+      "unidades": null,
+      "invertido": 100.0,
+      "pnl": -9.6,
+      "origen": "bot",
+      "motivo": "STOP_LOSS"
+    },
+    {
+      "ticker": "AMD",
+      "fecha_cierre": null,
+      "precio_entrada": null,
+      "precio_salida": null,
+      "unidades": null,
+      "invertido": 125.87,
+      "pnl": -3.75,
+      "origen": "bot",
+      "motivo": "STOP_LOSS"
+    }
+  ]
+}
