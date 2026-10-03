@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       estudio:
-        description: 'bot = backtest del bot Quant; alternativas = SPY vs A vs B vs bot; fundamental = ranking actual del satelite'
+        description: 'bot = backtest del bot Quant; alternativas = SPY vs A vs B vs bot; fundamental = ranking actual del satelite; fundamental_historico = backtest del satelite con SimFin'
         type: choice
-        options: [bot, alternativas, fundamental]
+        options: [bot, alternativas, fundamental, fundamental_historico]
         default: bot
       aporte:
         description: 'Solo alternativas: aporte mensual en USD'
@@ -52,7 +52,16 @@ jobs:
           SPREAD: ${{ github.event.inputs.spread }}
           ESTUDIO: ${{ github.event.inputs.estudio }}
           APORTE: ${{ github.event.inputs.aporte }}
+          SIMFIN_API_KEY: ${{ secrets.SIMFIN_API_KEY }}
         run: |
+          if [ "$ESTUDIO" = "fundamental_historico" ]; then
+            pip install simfin
+            ARGS="--salida resultados"
+            if [ -n "$CAPITAL" ]; then ARGS="$ARGS --capital $CAPITAL"; fi
+            python backtest_fundamental.py $ARGS
+            cat resultados/fundamental_backtest.md >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           if [ "$ESTUDIO" = "fundamental" ]; then
             mkdir -p resultados
             python fundamental.py | tee resultados/fundamental.txt

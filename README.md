@@ -25,6 +25,7 @@ reporte mensual del filtro y resumen semanal frente a SPY. Se desactiva con
 | `estrategias.py` | Backtest de SPY, A (tendencia), B (momentum) y la mezcla 50/50. |
 | `calendario.py` | Feriados y días hábiles de NYSE. |
 | `fundamental.py` | Filtro fundamental (datos de yfinance): filtros mínimos y puntaje. `python fundamental.py` muestra el ranking actual. |
+| `backtest_fundamental.py` | Backtest del satélite con datos históricos de SimFin (punto en el tiempo). Actions → Backtest → estudio `fundamental_historico`; requiere el secreto `SIMFIN_API_KEY`. |
 | `satelite.py` | Cartera satélite: compras iniciales, revisión trimestral, reportes. Estado en `datos/satelite_modelo.json`. |
 | `backtest.py` | Backtest día a día con las mismas reglas del bot, comparación con SPY y walk-forward. |
 | `notebooks/ultimate_quant_v3.ipynb` | Laboratorio de Colab. Descarga el código de este repo (no tiene copia propia). |

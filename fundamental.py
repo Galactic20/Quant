@@ -179,8 +179,10 @@ def puntuar(df: pd.DataFrame, filtros: dict = FILTROS, pesos: dict = PESOS) -> p
     for c in NUMERICOS:
         if c in d:
             d[c] = _num(d[c])
-    d["sector"] = [sector_de(t) for t in d.index]
-    d["pais"] = [pais_de(t) for t in d.index]
+    if "sector" not in d:            # el backtest (SimFin) trae su propio sector
+        d["sector"] = [sector_de(t) for t in d.index]
+    if "pais" not in d:
+        d["pais"] = [pais_de(t) for t in d.index]
     hist = d["fcf_hist"] if "fcf_hist" in d else pd.Series([None] * len(d), index=d.index)
     hist = [h if isinstance(h, (list, tuple)) and len(h) else [f] for h, f in zip(hist, d["freeCashflow"])]
     d["fcf_prom"] = [float(np.mean(h)) if all(pd.notna(h)) else np.nan for h in hist]
