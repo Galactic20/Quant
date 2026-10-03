@@ -91,3 +91,12 @@ def test_stop_loss_se_ejecuta_en_caida():
     assert (r["operaciones"]["motivo"] == "STOP_LOSS").sum() >= 3
     sin = bf.simular(d, "2021-01-01", n=5, max_sector=1, stops=False)
     assert len(sin["operaciones"]) == 0 or (sin["operaciones"]["motivo"] != "STOP_LOSS").all()
+
+
+def test_tolera_tickers_duplicados_de_simfin():
+    d = datos_sinteticos()
+    d["sectores"] = pd.concat([d["sectores"], pd.Series({"AAA": "Technology"})])
+    fecha = bf.fechas_revision(d["adj"].index, "2021-01-01")[0]
+    cap = pd.concat([d["cap"][fecha], pd.Series({"AAA": 1e11})])
+    tabla = bf.fundamentales_en(fecha, d["ttm"], d["bal"], cap, d["adj"].loc[fecha], d["sectores"])
+    assert "AAA" in tabla.index and not tabla.index.duplicated().any()

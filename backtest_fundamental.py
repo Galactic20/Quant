@@ -62,6 +62,10 @@ def _ultimo(df: pd.DataFrame, k: int = 0) -> pd.DataFrame:
     g = df.groupby(COL["ticker"], sort=False)
     return g.nth(-1 - k).set_index(COL["ticker"])
 
+def _sin_duplicados(s: pd.Series) -> pd.Series:
+    """SimFin repite algunos tickers (p. ej. clases de acción): se usa el primero."""
+    return s[~s.index.duplicated(keep="first")]
+
 def fundamentales_en(fecha, ttm: pd.DataFrame, bal: pd.DataFrame,
                      cap: pd.Series, precio: pd.Series, sectores: pd.Series) -> pd.DataFrame:
     """
@@ -81,6 +85,10 @@ def fundamentales_en(fecha, ttm: pd.DataFrame, bal: pd.DataFrame,
     hist = pd.concat({k: fcf(_ultimo(t, k)) for k in (0, 4, 8, 12)}, axis=1)
     rev_prev = _ultimo(t, 4)[COL["revenue"]]
     bu = _ultimo(b)
+    bu = bu[~bu.index.duplicated(keep="last")]
+    ult = ult[~ult.index.duplicated(keep="last")]
+    cap = _sin_duplicados(cap)
+    sectores = _sin_duplicados(sectores)
     equity = bu[COL["equity"]].reindex(ult.index)
     deuda = (bu[COL["st_debt"]].fillna(0) + bu[COL["lt_debt"]].fillna(0)).reindex(ult.index)
     ni = ult[COL["net_income"]]
@@ -222,8 +230,9 @@ def cargar_simfin(directorio: str = "~/simfin_data") -> dict:
     revisiones = fechas_revision(adj.index, adj.index[0])
     snap = precios[precios[COL["date"]].isin(revisiones)]
     snap = snap.assign(cap=snap[COL["close"]] * snap[COL["shares"]])
-    cap = {f: g.set_index(COL["ticker"])["cap"] for f, g in snap.groupby(COL["date"])}
+    cap = {f: _sin_duplicados(g.set_index(COL["ticker"])["cap"]) for f, g in snap.groupby(COL["date"])}
     sectores = comp["IndustryId"].map(ind["Sector"]) if "IndustryId" in comp else pd.Series(dtype=str)
+    sectores = _sin_duplicados(sectores)
     return {"ttm": ttm, "bal": bal, "adj": adj, "cap": cap, "sectores": sectores}
 
 def main():
