@@ -13,7 +13,9 @@ disponible con `ESTRATEGIA_BOT=quant`.
 eToro, `cartera.CONFIG["CAPITAL_INICIAL"]`), sin aporte mensual fijo. Cuando
 deposites más dinero: Actions → *Bot de Inversión* → Run workflow, modo
 `cierre` y el monto en **aporte**; el bot lo registra y envía las órdenes
-para invertirlo.
+para invertirlo. Para **retirar**, igual pero con el monto en **retiro**: el
+bot indica qué vender manteniendo el 50/50 y descuenta el retiro sin contarlo
+como pérdida. Registra cada depósito o retiro una sola vez.
 
 **Satélite fundamental (solo virtual, aprendizaje):** cartera virtual aparte ($1,000, 5 acciones de EE. UU.
 y de otros mercados vía ADR) elegida con un filtro de calidad + valoración +

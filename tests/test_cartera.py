@@ -149,3 +149,30 @@ def test_fin_de_mes_sin_aporte_fijo_solo_rebalancea(hist, tmp_path):
     texto, _ = correr(date(2026, 10, 30), hist2, ruta, cfg=sin_fijo)
     assert "REBALANCEO MENSUAL" in texto and "Deposita" not in texto
     assert ca.cargar_modelo(str(ruta))["aportado"] == 2380
+
+
+def test_retiro_vende_y_no_cuenta_como_perdida(hist, tmp_path):
+    ruta = tmp_path / "modelo.json"
+    correr(date(2026, 10, 7), hist, ruta)
+    p = precios_de(hist)
+    m0 = ca.cargar_modelo(str(ruta))
+    nav0 = ca.valor(m0, p) / m0["participaciones"]
+    enviados = []
+    texto = ca.ejecutar(date(2026, 10, 14), manual=True, enviar=enviados.append, cfg=CFG,
+                        precios_hist=hist, ruta=str(ruta), retiro=500)
+    assert "RETIRO REGISTRADO: $500.00" in texto and "VENDER SPY" in texto and "VENDER QQQ" in texto
+    m = ca.cargar_modelo(str(ruta))
+    assert m["retirado"] == 500 and m["aportes"][-1]["usd"] == -500
+    assert ca.valor(m, p) == pytest.approx(2380 - 500, rel=0.003)
+    assert ca.valor(m, p) / m["participaciones"] == pytest.approx(nav0, rel=0.001)
+    assert m["unidades"]["SPY"] * p["SPY"] / ca.valor(m, p) == pytest.approx(0.5, abs=0.01)
+    assert "retirado $500.00" in texto
+
+
+def test_retiro_mayor_que_la_cartera_no_se_registra(hist, tmp_path):
+    ruta = tmp_path / "modelo.json"
+    correr(date(2026, 10, 7), hist, ruta)
+    antes = ca.cargar_modelo(str(ruta))
+    texto = ca.ejecutar(date(2026, 10, 14), manual=True, enviar=lambda t: None, cfg=CFG,
+                        precios_hist=hist, ruta=str(ruta), retiro=99999)
+    assert "NO REGISTRADO" in texto and ca.cargar_modelo(str(ruta)) == antes

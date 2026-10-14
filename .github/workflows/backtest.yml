@@ -7,12 +7,12 @@ on:
   workflow_dispatch:
     inputs:
       estudio:
-        description: 'bot = backtest del bot Quant; alternativas = SPY vs A vs B vs bot; fundamental = ranking actual del satelite; fundamental_historico = backtest del satelite con SimFin'
+        description: 'bot = backtest del bot Quant; alternativas = SPY vs A vs B vs bot; fundamental = ranking actual del satelite; fundamental_historico = backtest del satelite con SimFin; proteccion = propuestas 1 y 2 para la cartera 50/50'
         type: choice
-        options: [bot, alternativas, fundamental, fundamental_historico]
+        options: [bot, alternativas, proteccion, fundamental, fundamental_historico]
         default: bot
       aporte:
-        description: 'Solo alternativas: aporte mensual en USD'
+        description: 'Solo alternativas/proteccion: aporte mensual en USD'
         default: '100'
       periodo:
         description: 'Historia a descargar (yfinance: 5y, 10y, max)'
@@ -66,6 +66,13 @@ jobs:
             mkdir -p resultados
             python fundamental.py | tee resultados/fundamental.txt
             { echo '```'; cat resultados/fundamental.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ "$ESTUDIO" = "proteccion" ]; then
+            ARGS="--salida resultados --aporte ${APORTE:-100} --solo-proteccion"
+            if [ -n "$CAPITAL" ]; then ARGS="$ARGS --capital $CAPITAL"; fi
+            python estrategias.py $ARGS
+            cat resultados/proteccion.md >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           if [ "$ESTUDIO" = "alternativas" ]; then

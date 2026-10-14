@@ -11,6 +11,8 @@ comprar y vender.
     (50% SPY + 50% del ETF que elija B), más el aporte fijo si se configura.
   - Depósito extra (ejecución manual con el input "aporte"): se registra
     el monto y se envían las órdenes para invertirlo ese mismo día.
+  - Retiro (input "retiro"): indica qué vender para sacar ese monto
+    manteniendo el 50/50, y lo descuenta sin contarlo como pérdida.
   - Viernes (o ejecución manual): resumen de la cartera frente a SPY.
   - Primera ejecución: crea la cartera con el capital inicial.
 
@@ -95,6 +97,16 @@ def aportar(modelo: dict, monto: float, precios: dict):
     modelo["participaciones"] += monto / nav
     modelo["referencia_spy_unidades"] += monto / precios["SPY"]
 
+def retirar(modelo: dict, monto: float, precios: dict):
+    """Saca `monto` USD: reduce participaciones al NAV de hoy (no afecta el rendimiento)."""
+    if monto <= 0:
+        return
+    nav = valor(modelo, precios) / modelo["participaciones"]
+    modelo["efectivo"] -= monto
+    modelo["retirado"] = modelo.get("retirado", 0.0) + monto
+    modelo["participaciones"] -= monto / nav
+    modelo["referencia_spy_unidades"] -= monto / precios["SPY"]
+
 def rebalancear(modelo: dict, objetivo: dict, precios: dict, fecha: date,
                 cfg: dict = CONFIG) -> list:
     """Lleva la cartera a `objetivo` (pesos). Devuelve las órdenes, ventas primero."""
@@ -148,7 +160,9 @@ def texto_senal(objetivo: dict, puntajes: dict) -> str:
 def texto_estado(modelo: dict, precios: dict) -> str:
     v, ref = valor(modelo, precios), valor_referencia(modelo, precios)
     nav = v / modelo["participaciones"]
-    lineas = [f"Valor cartera: {_usd(v)} (aportado {_usd(modelo['aportado'])})",
+    retirado = modelo.get("retirado", 0.0)
+    flujo = f"aportado {_usd(modelo['aportado'])}" + (f", retirado {_usd(retirado)}" if retirado else "")
+    lineas = [f"Valor cartera: {_usd(v)} ({flujo})",
               f"Rendimiento: {(nav - 1) * 100:+.2f}% desde {modelo['inicio']}",
               f"SPY con los mismos aportes: {_usd(ref)} ({(v - ref):+,.2f} vs SPY)",
               "Posiciones:"]
@@ -181,10 +195,11 @@ def texto_ordenes(ordenes: list) -> str:
 
 def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
              precios_hist=None, cfg: dict = CONFIG, ruta: str = MODELO_FILE,
-             aporte: float = 0.0) -> str | None:
+             aporte: float = 0.0, retiro: float = 0.0) -> str | None:
     """Decide qué hacer hoy, actualiza el modelo y envía el mensaje. Devuelve el texto.
 
     `aporte` > 0 registra un depósito hecho en eToro y envía las órdenes para invertirlo.
+    `retiro` > 0 envía las ventas necesarias para sacar ese monto.
     """
     if cargar_modelo(ruta) is None and not cfg.get("CAPITAL_INICIAL"):
         texto = ("CARTERA ETF (50% SPY + 50% B) - EN PAUSA\n"
@@ -212,6 +227,26 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
         texto = "\n".join([f"CARTERA {modelo['estrategia']} - INICIO", sep,
                            texto_senal(objetivo, puntajes), sep,
                            texto_ordenes(ordenes), sep, texto_estado(modelo, precios)])
+    elif retiro > 0:
+        disponible = valor(modelo, precios) * (1 - cfg["COSTE_PCT"])
+        if retiro > disponible:
+            texto = (f"RETIRO NO REGISTRADO: pediste {_usd(retiro)} pero la cartera vale "
+                     f"{_usd(disponible)} (neto de spread). Revisa el monto.")
+            enviar(texto)
+            print(texto)
+            return texto
+        retirar(modelo, retiro, precios)
+        modelo.setdefault("aportes", []).append({"fecha": hoy.isoformat(), "usd": -retiro})
+        ordenes = rebalancear(modelo, objetivo, precios, hoy, cfg)
+        if es_ultimo_dia_habil_mes(hoy):
+            modelo["ultimo_cierre_mes"] = hoy.isoformat()[:7]
+        guardar_modelo(modelo, ruta)
+        texto = "\n".join([f"RETIRO REGISTRADO: {_usd(retiro)} - {modelo['estrategia']}", sep,
+                           "1. Ejecuta estas ordenes (al cierre de hoy o en la apertura de manana):",
+                           "", texto_ordenes(ordenes),
+                           f"2. Cuando se liquiden las ventas, retira {_usd(retiro)} desde eToro.",
+                           "   (eToro cobra su comision de retiro aparte; revisala antes.)",
+                           sep, texto_estado(modelo, precios)])
     elif aporte > 0:
         aportar(modelo, aporte, precios)
         modelo.setdefault("aportes", []).append({"fecha": hoy.isoformat(), "usd": aporte})

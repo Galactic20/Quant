@@ -32,6 +32,9 @@ on:
       aporte:
         description: 'Deposito nuevo en eToro (USD) para invertir en la cartera ETF; vacio = ninguno'
         default: ''
+      retiro:
+        description: 'Monto a retirar de la cartera ETF (USD); el bot indica que vender. Vacio = ninguno'
+        default: ''
 
 # Evita dos ejecuciones simultaneas que compitan al guardar posiciones.json
 concurrency:
@@ -74,6 +77,7 @@ jobs:
           CRON_PROGRAMADO: ${{ github.event.schedule }}
           MODO_MANUAL: ${{ github.event.inputs.modo }}
           APORTE: ${{ github.event.inputs.aporte }}
+          RETIRO: ${{ github.event.inputs.retiro }}
         run: python bot_telegram.py
 
       # 5. Si la cartera modelo, el satelite u otros archivos de estado
