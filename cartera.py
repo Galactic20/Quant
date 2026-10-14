@@ -2,6 +2,10 @@
 """
 CARTERA MODELO — 50% SPY + 50% estrategia B (momentum entre 5 ETFs)
 
+Filtro de momentum absoluto (P1, aprobado tras el backtest de protecciones):
+si incluso el mejor de los 5 ETFs tiene momentum negativo, la mitad B va a
+SGOV (letras del Tesoro de 0-3 meses) en vez de comprar algo que cae.
+
 El bot mantiene una cartera modelo en datos/cartera_modelo.json que se
 actualiza sola (el workflow la guarda en el repo). Tu cartera virtual de
 eToro debería replicarla: cada fin de mes el bot te dice exactamente qué
@@ -32,13 +36,13 @@ MODELO_FILE = "datos/cartera_modelo.json"
 
 CONFIG = {
     "PESO_SPY":        0.5,     # el resto va a la elección de la estrategia B
+    "REFUGIO":         "SGOV",  # fondo de dinero si todo el momentum es negativo (None = sin filtro)
     # Aporte fijo de fin de mes. 0 = sin aporte fijo: los depósitos se
     # registran cuando ocurren (input "aporte" del workflow).
     "APORTE_MENSUAL":  0.0,
-    # Capital real con el que se inicia la cartera. None = en pausa: no crea la
-    # cartera ni envía órdenes. Efectivo disponible en eToro el 14-oct-2026:
-    # $316.15; se activará con ese monto tras revisar el backtest de protecciones.
-    "CAPITAL_INICIAL": None,
+    # Capital real con el que se inicia la cartera (efectivo disponible en
+    # eToro el 14-oct-2026). None = en pausa: no crea la cartera ni envía órdenes.
+    "CAPITAL_INICIAL": 316.15,
     "ORDEN_MINIMA":    10.0,    # USD; diferencias menores no se operan (mínimo eToro)
     "COSTE_PCT":       es.COSTE_PCT_ETF,
 }
@@ -147,12 +151,22 @@ def rebalancear(modelo: dict, objetivo: dict, precios: dict, fecha: date,
 def _usd(x: float) -> str:
     return f"${x:,.2f}"
 
-def texto_senal(objetivo: dict, puntajes: dict) -> str:
+def regla_cartera(cfg: dict = CONFIG):
+    """Asignación objetivo: PESO_SPY en SPY + el resto en B (con filtro si hay REFUGIO)."""
+    if not cfg.get("REFUGIO"):
+        return es.regla_spy_mas_b(cfg["PESO_SPY"])
+    return es.regla_mezcla([(cfg["PESO_SPY"], es.regla_comprar_mantener("SPY")),
+                            (1 - cfg["PESO_SPY"], es.regla_momentum_absoluto(refugio=cfg["REFUGIO"]))])
+
+def texto_senal(objetivo: dict, puntajes: dict, refugio: str = None) -> str:
     orden = sorted(puntajes, key=puntajes.get, reverse=True)
+    filtro = bool(refugio) and bool(orden) and puntajes[orden[0]] <= 0
     lineas = ["Momentum (prom. 3/6/12 meses):"]
     for i, t in enumerate(orden):
-        marca = " <- elegido por B" if i == 0 else ""
+        marca = " <- elegido por B" if i == 0 and not filtro else ""
         lineas.append(f"  {t}: {puntajes[t] * 100:+.1f}%{marca}")
+    if filtro:
+        lineas.append(f"Filtro: todos negativos -> la mitad B va a {refugio} (fondo de dinero)")
     asign = " + ".join(f"{w * 100:.0f}% {t}" for t, w in
                        sorted(objetivo.items(), key=lambda kv: -kv[1]))
     lineas.append(f"Asignacion objetivo: {asign}")
@@ -211,10 +225,14 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
             enviar(texto)
             return texto
         return None
-    hist = precios_hist if precios_hist is not None else es.descargar_etfs(periodo="2y")
+    refugio = cfg.get("REFUGIO")
+    if precios_hist is None:
+        precios_hist = es.descargar_etfs(es.UNIVERSO_MOMENTUM + ([refugio] if refugio else []),
+                                         periodo="2y")
+    hist = precios_hist
     precios = {t: float(hist[t].iloc[-1]) for t in hist.columns}
     puntajes = es.puntajes_momentum(hist)
-    objetivo = es.regla_spy_mas_b(cfg["PESO_SPY"])(hist)
+    objetivo = regla_cartera(cfg)(hist)
     sep = "-" * 34
     modelo = cargar_modelo(ruta)
 
@@ -226,7 +244,7 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
             modelo["ultimo_cierre_mes"] = hoy.isoformat()[:7]
         guardar_modelo(modelo, ruta)
         texto = "\n".join([f"CARTERA {modelo['estrategia']} - INICIO", sep,
-                           texto_senal(objetivo, puntajes), sep,
+                           texto_senal(objetivo, puntajes, refugio), sep,
                            texto_ordenes(ordenes), sep, texto_estado(modelo, precios)])
     elif retiro > 0:
         disponible = valor(modelo, precios) * (1 - cfg["COSTE_PCT"])
@@ -257,7 +275,7 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
         guardar_modelo(modelo, ruta)
         texto = "\n".join([f"APORTE REGISTRADO: {_usd(aporte)} - {modelo['estrategia']}", sep,
                            "Ejecuta al cierre de hoy o en la apertura de manana:", "",
-                           texto_ordenes(ordenes), sep, texto_senal(objetivo, puntajes), sep,
+                           texto_ordenes(ordenes), sep, texto_senal(objetivo, puntajes, refugio), sep,
                            texto_estado(modelo, precios)])
     elif es_ultimo_dia_habil_mes(hoy) and modelo.get("ultimo_cierre_mes") != hoy.isoformat()[:7]:
         fijo = cfg["APORTE_MENSUAL"]
@@ -269,13 +287,13 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
                   "2. Ejecuta al cierre de hoy o en la apertura de manana:"] if fijo > 0
                  else ["Ejecuta al cierre de hoy o en la apertura de manana:"])
         texto = "\n".join([f"REBALANCEO MENSUAL - {modelo['estrategia']}", sep, *pasos, "",
-                           texto_ordenes(ordenes), sep, texto_senal(objetivo, puntajes), sep,
+                           texto_ordenes(ordenes), sep, texto_senal(objetivo, puntajes, refugio), sep,
                            texto_estado(modelo, precios)])
     elif hoy.weekday() == 4 or manual:
         texto = "\n".join([f"RESUMEN SEMANAL - {modelo['estrategia']}", sep,
                            texto_estado(modelo, precios), sep,
                            "Senal actual (se aplica a fin de mes):",
-                           texto_senal(objetivo, puntajes)])
+                           texto_senal(objetivo, puntajes, refugio)])
     else:
         print("Cartera: nada que informar hoy.")
         return None
