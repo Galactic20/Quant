@@ -22,7 +22,8 @@ def hist():
     return p
 
 
-CFG = {**ca.CONFIG, "CAPITAL_INICIAL": 2380}
+CFG = {**ca.CONFIG, "CAPITAL_INICIAL": 2380, "APORTE_MENSUAL": 100.0}
+PAUSA = {**ca.CONFIG, "CAPITAL_INICIAL": None}
 
 
 def correr(hoy, hist, ruta, manual=False, cfg=CFG):
@@ -108,10 +109,74 @@ def test_inicio_en_fin_de_mes_no_duplica_aporte(hist, tmp_path):
     assert ca.cargar_modelo(str(ruta))["aportado"] == 2380
 
 
+def test_config_actual_en_pausa():
+    assert ca.CONFIG["CAPITAL_INICIAL"] is None
+
+
 def test_sin_capital_definido_queda_en_pausa(hist, tmp_path):
     ruta = tmp_path / "modelo.json"
-    texto, enviados = correr(date(2026, 10, 30), hist, ruta, cfg=ca.CONFIG)
+    texto, enviados = correr(date(2026, 10, 30), hist, ruta, cfg=PAUSA)
     assert texto is None and enviados == [] and ca.cargar_modelo(str(ruta)) is None
-    texto, enviados = correr(date(2026, 10, 14), hist, ruta, manual=True, cfg=ca.CONFIG)
+    texto, enviados = correr(date(2026, 10, 14), hist, ruta, manual=True, cfg=PAUSA)
     assert "EN PAUSA" in texto and len(enviados) == 1
     assert ca.cargar_modelo(str(ruta)) is None
+
+
+def test_capital_real_configurado_crea_ordenes_validas(hist, tmp_path):
+    ruta = tmp_path / "modelo.json"
+    texto, _ = correr(date(2026, 10, 15), hist, ruta, cfg={**ca.CONFIG, "CAPITAL_INICIAL": 316.15})
+    assert "INICIO" in texto
+    m = ca.cargar_modelo(str(ruta))
+    assert m["aportado"] == pytest.approx(316.15)
+    compras = [h for h in m["historial"] if h["accion"] == "COMPRAR"]
+    assert len(compras) == 2 and all(h["usd"] >= ca.CONFIG["ORDEN_MINIMA"] for h in compras)
+
+
+def test_aporte_extra_se_invierte_el_mismo_dia(hist, tmp_path):
+    ruta = tmp_path / "modelo.json"
+    correr(date(2026, 10, 7), hist, ruta)
+    enviados = []
+    texto = ca.ejecutar(date(2026, 10, 14), manual=True, enviar=enviados.append, cfg=CFG,
+                        precios_hist=hist, ruta=str(ruta), aporte=200)
+    assert "APORTE REGISTRADO: $200.00" in texto and "COMPRAR" in texto
+    m = ca.cargar_modelo(str(ruta))
+    assert m["aportado"] == 2580 and m["aportes"][-1] == {"fecha": "2026-10-14", "usd": 200}
+    assert ca.valor(m, precios_de(hist)) == pytest.approx(2580, rel=0.003)
+
+
+def test_fin_de_mes_sin_aporte_fijo_solo_rebalancea(hist, tmp_path):
+    ruta = tmp_path / "modelo.json"
+    sin_fijo = {**CFG, "APORTE_MENSUAL": 0.0}
+    correr(date(2026, 10, 7), hist, ruta, cfg=sin_fijo)
+    hist2 = hist.copy()
+    hist2["GLD"] = np.linspace(100, 500, len(hist2))
+    texto, _ = correr(date(2026, 10, 30), hist2, ruta, cfg=sin_fijo)
+    assert "REBALANCEO MENSUAL" in texto and "Deposita" not in texto
+    assert ca.cargar_modelo(str(ruta))["aportado"] == 2380
+
+
+def test_retiro_vende_y_no_cuenta_como_perdida(hist, tmp_path):
+    ruta = tmp_path / "modelo.json"
+    correr(date(2026, 10, 7), hist, ruta)
+    p = precios_de(hist)
+    m0 = ca.cargar_modelo(str(ruta))
+    nav0 = ca.valor(m0, p) / m0["participaciones"]
+    enviados = []
+    texto = ca.ejecutar(date(2026, 10, 14), manual=True, enviar=enviados.append, cfg=CFG,
+                        precios_hist=hist, ruta=str(ruta), retiro=500)
+    assert "RETIRO REGISTRADO: $500.00" in texto and "VENDER SPY" in texto and "VENDER QQQ" in texto
+    m = ca.cargar_modelo(str(ruta))
+    assert m["retirado"] == 500 and m["aportes"][-1]["usd"] == -500
+    assert ca.valor(m, p) == pytest.approx(2380 - 500, rel=0.003)
+    assert ca.valor(m, p) / m["participaciones"] == pytest.approx(nav0, rel=0.001)
+    assert m["unidades"]["SPY"] * p["SPY"] / ca.valor(m, p) == pytest.approx(0.5, abs=0.01)
+    assert "retirado $500.00" in texto
+
+
+def test_retiro_mayor_que_la_cartera_no_se_registra(hist, tmp_path):
+    ruta = tmp_path / "modelo.json"
+    correr(date(2026, 10, 7), hist, ruta)
+    antes = ca.cargar_modelo(str(ruta))
+    texto = ca.ejecutar(date(2026, 10, 14), manual=True, enviar=lambda t: None, cfg=CFG,
+                        precios_hist=hist, ruta=str(ruta), retiro=99999)
+    assert "NO REGISTRADO" in texto and ca.cargar_modelo(str(ruta)) == antes

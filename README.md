@@ -4,14 +4,20 @@ Bot de inversión (operado manualmente en eToro). Corre en GitHub
 Actions y avisa por Telegram.
 
 **Estrategia actual (v3.0):** cartera modelo **50% SPY + 50% estrategia B**
-(momentum mensual entre SPY, QQQ, EFA, GLD e IEF), con aporte mensual. El
+(momentum mensual entre SPY, QQQ, EFA, GLD e IEF), con aportes cuando los haya. El
 último día hábil de cada mes el bot envía las órdenes de rebalanceo; los
 viernes, un resumen frente a SPY. El escáner de swing trading anterior sigue
 disponible con `ESTRATEGIA_BOT=quant`.
 
-**Estado actual:** la cartera ETF está **en pausa** hasta definir el capital
-real (`cartera.CONFIG["CAPITAL_INICIAL"]`); al definirlo, la siguiente
-ejecución crea la cartera y envía las primeras órdenes.
+**Estado actual:** la cartera ETF está **en pausa** hasta revisar el backtest
+de protecciones (estudio `proteccion`); luego se iniciará con **$316.15**
+(efectivo real en eToro, `cartera.CONFIG["CAPITAL_INICIAL"]`), sin aporte
+mensual fijo. Cuando
+deposites más dinero: Actions → *Bot de Inversión* → Run workflow, modo
+`cierre` y el monto en **aporte**; el bot lo registra y envía las órdenes
+para invertirlo. Para **retirar**, igual pero con el monto en **retiro**: el
+bot indica qué vender manteniendo el 50/50 y descuenta el retiro sin contarlo
+como pérdida. Registra cada depósito o retiro una sola vez.
 
 **Satélite fundamental (solo virtual, aprendizaje):** cartera virtual aparte ($1,000, 5 acciones de EE. UU.
 y de otros mercados vía ADR) elegida con un filtro de calidad + valoración +

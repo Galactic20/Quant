@@ -63,6 +63,16 @@ def cargar_chandelier_previo() -> dict:
 # MODO DE EJECUCION
 # ======================================================================
 
+def monto_env(nombre: str) -> float:
+    """Lee un monto en USD de una variable de entorno ("", "150", "$1,200.50")."""
+    crudo = os.getenv(nombre, "").strip()
+    try:
+        monto = float(crudo.replace("$", "").replace(",", "") or 0)
+    except ValueError:
+        enviar_telegram(nombre.capitalize() + " no valido: '" + crudo + "'. No se registro.")
+        return 0.0
+    return max(monto, 0.0)
+
 def resolver_modo(ahora_utc: datetime = None,
                   cron: str = None, manual: str = None) -> str | None:
     """Devuelve 'APERTURA', 'CIERRE' o None si esta ejecucion debe saltarse."""
@@ -332,7 +342,11 @@ if __name__ == "__main__":
         manual = os.getenv("MODO_MANUAL", "").strip() != ""
         if modo == "CIERRE" or manual:
             hoy = datetime.now(NY).date()
-            cartera.ejecutar(hoy, manual=manual)
+            aporte, retiro = monto_env("APORTE"), monto_env("RETIRO")
+            if aporte and retiro:
+                enviar_telegram("Indica aporte O retiro, no ambos. No se registro ninguno.")
+                aporte = retiro = 0.0
+            cartera.ejecutar(hoy, manual=manual, aporte=aporte, retiro=retiro)
             if os.getenv("SATELITE", "1").strip() != "0":
                 # El satelite no debe impedir el mensaje de la cartera principal
                 try:

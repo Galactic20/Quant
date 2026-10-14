@@ -100,3 +100,26 @@ def test_take_profit_se_ejecuta():
     p = pd.DataFrame({"SPY": np.linspace(100, 160, 120), "IEF": 100.0}, index=idx)
     r = es.simular(p, es.regla_comprar_mantener("SPY"), 1000, coste_pct=0.0, tp_pct=0.20)
     assert r["tps"] >= 1
+
+
+def test_filtro_absoluto_va_a_efectivo_si_todo_cae():
+    idx = pd.bdate_range("2020-01-01", periods=300)
+    p = pd.DataFrame({t: np.linspace(100, 80 + i, 300) for i, t in
+                      enumerate(es.UNIVERSO_MOMENTUM)}, index=idx)
+    p[es.EFECTIVO] = 100.0
+    assert es.regla_momentum_absoluto()(p) == {es.EFECTIVO: 1.0}
+    p["GLD"] = np.linspace(100, 150, 300)
+    assert es.regla_momentum_absoluto()(p) == {"GLD": 1.0}
+
+
+def test_propuestas_simulan_y_reportan_eventos():
+    p = precios_sinteticos(900)
+    p[es.EFECTIVO] = 100 * (1 + 0.04 / 252) ** np.arange(len(p))
+    for nombre, regla in es.PROPUESTAS.items():
+        r = es.simular(p, regla, 1000, inicio=p.index[300])
+        assert r["valor"].iloc[-1] > 0, nombre
+        pesos = regla(p)
+        assert sum(pesos.values()) == pytest.approx(1.0), nombre
+    ev = es.ventanas_caida(r["nav"], {"tramo": (p.index[400], p.index[500]),
+                                      "fuera": ("1990-01-01", "1990-02-01")})
+    assert ev["tramo"] is not None and ev["fuera"] is None

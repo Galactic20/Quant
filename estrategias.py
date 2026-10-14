@@ -90,6 +90,34 @@ def regla_spy_mas_b(peso_spy: float = 0.5):
                          (1 - peso_spy, regla_momentum())])
 
 
+# --- Propuestas de protección (estudio "proteccion") -------------------
+EFECTIVO = "EFECTIVO"   # fondo de dinero (SGOV/BIL) simulado con la letra del Tesoro a 3 meses
+
+def regla_momentum_absoluto(universo: list = None, refugio: str = EFECTIVO):
+    """Propuesta 1: B, pero si incluso el mejor ETF tiene puntaje negativo → refugio."""
+    universo = universo or UNIVERSO_MOMENTUM
+    def regla(hist: pd.DataFrame) -> dict:
+        puntaje = puntajes_momentum(hist, universo)
+        if not puntaje:
+            return {"IEF": 1.0}
+        mejor = max(puntaje, key=puntaje.get)
+        return {mejor: 1.0} if puntaje[mejor] > 0 else {refugio: 1.0}
+    return regla
+
+PROPUESTAS = {
+    "Actual: 50% SPY + 50% B":
+        regla_spy_mas_b(0.5),
+    "P1: 50% SPY + 50% B con filtro":
+        regla_mezcla([(0.5, regla_comprar_mantener("SPY")), (0.5, regla_momentum_absoluto())]),
+    "P2: 50% A + 50% B":
+        regla_mezcla([(0.5, regla_tendencia("SPY", "IEF", 200)), (0.5, regla_momentum())]),
+    "P1+P2: 50% A + 50% B con filtro":
+        regla_mezcla([(0.5, regla_tendencia("SPY", "IEF", 200)), (0.5, regla_momentum_absoluto())]),
+    "SPY (referencia)":
+        regla_comprar_mantener("SPY"),
+}
+
+
 # ======================================================================
 # SIMULADOR DE CARTERA CON REBALANCEO MENSUAL
 # ======================================================================
@@ -265,16 +293,100 @@ def descargar_etfs(tickers: list = None, periodo: str = "max") -> pd.DataFrame:
         series[t] = df["Close"]
     return pd.DataFrame(series).dropna()
 
+def serie_efectivo(indice: pd.DatetimeIndex, periodo: str = "max") -> pd.Series:
+    """Índice de un fondo de dinero: acumula a diario el rendimiento de la letra
+    del Tesoro a 13 semanas (^IRX), neto de 0.10% anual de gastos."""
+    irx = qc._normalizar_columnas(
+        qc.yf.download("^IRX", period=periodo, progress=False, auto_adjust=True))["Close"]
+    tasa = (irx.reindex(indice).ffill().bfill() / 100 - 0.001).clip(lower=0)
+    return 100 * (1 + tasa / 252).cumprod()
+
+def ventanas_caida(nav: pd.Series, eventos: dict) -> dict:
+    """Retorno de la estrategia en cada ventana {nombre: (inicio, fin)}."""
+    out = {}
+    for nombre, (a, b) in eventos.items():
+        tramo = nav[(nav.index >= pd.Timestamp(a)) & (nav.index <= pd.Timestamp(b))]
+        out[nombre] = round((tramo.iloc[-1] / tramo.iloc[0] - 1) * 100, 1) if len(tramo) > 1 else None
+    return out
+
+EVENTOS = {
+    "Crisis 2008 (oct-07 a mar-09)":   ("2007-10-09", "2009-03-09"),
+    "Rebote 2009 (mar-09 a dic-09)":   ("2009-03-09", "2009-12-31"),
+    "COVID (feb-20 a mar-20)":         ("2020-02-19", "2020-03-23"),
+    "Rebote COVID (mar-20 a dic-20)":  ("2020-03-23", "2020-12-31"),
+    "2022 (acciones y bonos caen)":    ("2022-01-03", "2022-12-30"),
+}
+
+def reporte_proteccion(precios: pd.DataFrame, capital: float, aporte: float) -> str:
+    """Backtest de las propuestas 1 y 2 frente a la cartera actual."""
+    precios = precios.copy()
+    precios[EFECTIVO] = serie_efectivo(precios.index)
+    inicio_largo = precios.index[0] + pd.DateOffset(days=380)
+    txt = ["## 5. Propuestas de protección",
+           "- **P1**: la mitad B pasa a un fondo de dinero (SGOV/BIL; simulado con la letra "
+           "del Tesoro a 3 meses menos 0.10% de gastos) si incluso el mejor de los 5 ETFs "
+           "tiene momentum negativo.",
+           "- **P2**: la mitad SPY sigue la regla de 200 días (estrategia A: SPY sobre su "
+           "SMA200, si no IEF).",
+           "- Parámetros clásicos, sin optimizar.", ""]
+    diez = precios.index[-1] - pd.DateOffset(years=10)
+    periodos = [("Historia larga, sin aportes", inicio_largo, 0.0),
+                ("Últimos 10 años, sin aportes", diez, 0.0)]
+    if aporte > 0:
+        periodos.append((f"Últimos 10 años, aporte ${aporte:,.0f}/mes", diez, aporte))
+    resultados = {}
+    for etiqueta, ini, ap in periodos:
+        res = {n: simular(precios, r, capital, ap, inicio=ini) for n, r in PROPUESTAS.items()}
+        if not resultados:
+            resultados = res
+        filas = [resumen(n, r) for n, r in res.items()]
+        for f in filas:
+            f["% meses protegido"] = round(_tiempo_refugio(precios, PROPUESTAS[f["Estrategia"]], ini))
+        txt += [f"### {etiqueta}: {pd.Timestamp(ini).date()} → {precios.index[-1].date()}", "",
+                pd.DataFrame(filas).to_markdown(index=False), ""]
+    eventos = pd.DataFrame({n: ventanas_caida(r["nav"], EVENTOS) for n, r in resultados.items()})
+    txt += ["### Caídas y rebotes concretos (retorno % en cada ventana, historia larga)", "",
+            eventos.to_markdown(), "",
+            "### Retorno por año calendario, historia larga (%)", "",
+            retornos_anuales({n: r["nav"] for n, r in resultados.items()}).to_markdown(), ""]
+    return "\n".join(txt)
+
+def _tiempo_refugio(precios: pd.DataFrame, regla, inicio) -> float:
+    """% de meses en que la regla pone algo en IEF o EFECTIVO por protección
+    (excluye cuando B elige IEF por ser el más fuerte)."""
+    fechas = precios.index[precios.index >= pd.Timestamp(inicio)]
+    fin_mes = pd.Series(fechas, index=fechas).groupby(fechas.to_period("M")).max()
+    base = regla_spy_mas_b(0.5)
+    n = 0
+    for f in fin_mes:
+        hist = precios.loc[:f]
+        a, b = regla(hist), base(hist)
+        if a.get(EFECTIVO, 0) > 0 or a.get("IEF", 0) > b.get("IEF", 0) + 1e-9:
+            n += 1
+    return 100 * n / max(len(fin_mes), 1)
+
 def main():
     ap = argparse.ArgumentParser(description="Comparar estrategias alternativas")
     ap.add_argument("--periodo", default="max")
     ap.add_argument("--capital", type=float, default=qc.PARAMETROS["CAPITAL_INICIAL"])
     ap.add_argument("--aporte", type=float, default=100.0)
     ap.add_argument("--salida", default="resultados")
+    ap.add_argument("--solo-proteccion", action="store_true",
+                    help="Solo la sección 5 (propuestas de protección)")
     args = ap.parse_args()
     os.makedirs(args.salida, exist_ok=True)
 
     precios = descargar_etfs(periodo=args.periodo)
+    if args.solo_proteccion:
+        texto = "\n".join(["# Propuestas de protección para la cartera 50/50",
+                           f"Capital inicial ${args.capital:,.0f} · spread ETFs "
+                           f"{COSTE_PCT_ETF*100:.2f}% por lado · decisión mensual, ejecución "
+                           "al cierre del día hábil siguiente", "",
+                           reporte_proteccion(precios, args.capital, args.aporte)])
+        with open(os.path.join(args.salida, "proteccion.md"), "w", encoding="utf-8") as f:
+            f.write(texto)
+        print(texto)
+        return
     inicio_largo = precios.index[0] + pd.DateOffset(days=380)   # 12 meses de historia
     txt = ["# Estrategias alternativas vs bot Quant",
            f"Capital inicial ${args.capital:,.0f} · spread ETFs {COSTE_PCT_ETF*100:.2f}% por lado · "
@@ -318,6 +430,7 @@ def main():
             tabla_sl.to_markdown(index=False), ""]
 
     txt += ["### Retorno por año calendario, historia larga (%)", "", anual.to_markdown(), ""]
+    txt += [reporte_proteccion(precios, args.capital, args.aporte)]
     texto = "\n".join(txt)
     with open(os.path.join(args.salida, "estrategias.md"), "w", encoding="utf-8") as f:
         f.write(texto)
