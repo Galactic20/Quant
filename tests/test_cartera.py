@@ -19,6 +19,7 @@ from test_estrategias import precios_sinteticos
 def hist():
     p = precios_sinteticos(400)
     p["QQQ"] = np.linspace(100, 300, len(p))    # B elige QQQ
+    p["SGOV"] = 100 * (1 + 0.04 / 252) ** np.arange(len(p))
     return p
 
 
@@ -109,8 +110,26 @@ def test_inicio_en_fin_de_mes_no_duplica_aporte(hist, tmp_path):
     assert ca.cargar_modelo(str(ruta))["aportado"] == 2380
 
 
-def test_config_actual_en_pausa():
-    assert ca.CONFIG["CAPITAL_INICIAL"] is None
+def test_config_actual_capital_real_y_filtro_sgov():
+    assert ca.CONFIG["CAPITAL_INICIAL"] == 316.15
+    assert ca.CONFIG["REFUGIO"] == "SGOV"
+
+
+def test_filtro_absoluto_manda_mitad_b_a_sgov(hist, tmp_path):
+    caen = hist.copy()
+    for t in ["SPY", "QQQ", "EFA", "GLD", "IEF"]:
+        caen[t] = np.linspace(200, 120, len(caen))
+    ruta = tmp_path / "modelo.json"
+    texto, _ = correr(date(2026, 10, 7), caen, ruta)
+    m = ca.cargar_modelo(str(ruta))
+    assert set(m["asignacion"]) == {"SPY", "SGOV"}
+    assert "COMPRAR SGOV" in texto and "Filtro: todos negativos" in texto
+    assert "elegido por B" not in texto
+
+
+def test_sin_refugio_se_comporta_como_antes(hist):
+    sin = {**CFG, "REFUGIO": None}
+    assert ca.regla_cartera(sin)(hist) == ca.es.regla_spy_mas_b(0.5)(hist)
 
 
 def test_sin_capital_definido_queda_en_pausa(hist, tmp_path):
