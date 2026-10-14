@@ -9,8 +9,10 @@ Actions y avisa por Telegram.
 viernes, un resumen frente a SPY. El escáner de swing trading anterior sigue
 disponible con `ESTRATEGIA_BOT=quant`.
 
-**Estado actual:** la cartera ETF se inicia con **$316.15** (efectivo real en
-eToro, `cartera.CONFIG["CAPITAL_INICIAL"]`), sin aporte mensual fijo. Cuando
+**Estado actual:** la cartera ETF está **en pausa** hasta revisar el backtest
+de protecciones (estudio `proteccion`); luego se iniciará con **$316.15**
+(efectivo real en eToro, `cartera.CONFIG["CAPITAL_INICIAL"]`), sin aporte
+mensual fijo. Cuando
 deposites más dinero: Actions → *Bot de Inversión* → Run workflow, modo
 `cierre` y el monto en **aporte**; el bot lo registra y envía las órdenes
 para invertirlo. Para **retirar**, igual pero con el monto en **retiro**: el

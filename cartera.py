@@ -35,9 +35,10 @@ CONFIG = {
     # Aporte fijo de fin de mes. 0 = sin aporte fijo: los depósitos se
     # registran cuando ocurren (input "aporte" del workflow).
     "APORTE_MENSUAL":  0.0,
-    # Capital real con el que se inicia la cartera (efectivo disponible en
-    # eToro el 14-oct-2026). None = en pausa: no crea la cartera ni envía órdenes.
-    "CAPITAL_INICIAL": 316.15,
+    # Capital real con el que se inicia la cartera. None = en pausa: no crea la
+    # cartera ni envía órdenes. Efectivo disponible en eToro el 14-oct-2026:
+    # $316.15; se activará con ese monto tras revisar el backtest de protecciones.
+    "CAPITAL_INICIAL": None,
     "ORDEN_MINIMA":    10.0,    # USD; diferencias menores no se operan (mínimo eToro)
     "COSTE_PCT":       es.COSTE_PCT_ETF,
 }

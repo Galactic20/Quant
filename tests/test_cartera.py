@@ -109,6 +109,10 @@ def test_inicio_en_fin_de_mes_no_duplica_aporte(hist, tmp_path):
     assert ca.cargar_modelo(str(ruta))["aportado"] == 2380
 
 
+def test_config_actual_en_pausa():
+    assert ca.CONFIG["CAPITAL_INICIAL"] is None
+
+
 def test_sin_capital_definido_queda_en_pausa(hist, tmp_path):
     ruta = tmp_path / "modelo.json"
     texto, enviados = correr(date(2026, 10, 30), hist, ruta, cfg=PAUSA)
@@ -120,7 +124,7 @@ def test_sin_capital_definido_queda_en_pausa(hist, tmp_path):
 
 def test_capital_real_configurado_crea_ordenes_validas(hist, tmp_path):
     ruta = tmp_path / "modelo.json"
-    texto, _ = correr(date(2026, 10, 15), hist, ruta, cfg=ca.CONFIG)
+    texto, _ = correr(date(2026, 10, 15), hist, ruta, cfg={**ca.CONFIG, "CAPITAL_INICIAL": 316.15})
     assert "INICIO" in texto
     m = ca.cargar_modelo(str(ruta))
     assert m["aportado"] == pytest.approx(316.15)
