@@ -29,6 +29,9 @@ on:
         type: choice
         options: [cierre, apertura]
         default: cierre
+      aporte:
+        description: 'Deposito nuevo en eToro (USD) para invertir en la cartera ETF; vacio = ninguno'
+        default: ''
 
 # Evita dos ejecuciones simultaneas que compitan al guardar posiciones.json
 concurrency:
@@ -70,6 +73,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           CRON_PROGRAMADO: ${{ github.event.schedule }}
           MODO_MANUAL: ${{ github.event.inputs.modo }}
+          APORTE: ${{ github.event.inputs.aporte }}
         run: python bot_telegram.py
 
       # 5. Si la cartera modelo, el satelite u otros archivos de estado

@@ -7,8 +7,10 @@ actualiza sola (el workflow la guarda en el repo). Tu cartera virtual de
 eToro debería replicarla: cada fin de mes el bot te dice exactamente qué
 comprar y vender.
 
-  - Último día hábil del mes: aporte mensual + rebalanceo a la asignación
-    objetivo (50% SPY + 50% del ETF que elija B).
+  - Último día hábil del mes: rebalanceo a la asignación objetivo
+    (50% SPY + 50% del ETF que elija B), más el aporte fijo si se configura.
+  - Depósito extra (ejecución manual con el input "aporte"): se registra
+    el monto y se envían las órdenes para invertirlo ese mismo día.
   - Viernes (o ejecución manual): resumen de la cartera frente a SPY.
   - Primera ejecución: crea la cartera con el capital inicial.
 
@@ -28,10 +30,12 @@ MODELO_FILE = "datos/cartera_modelo.json"
 
 CONFIG = {
     "PESO_SPY":        0.5,     # el resto va a la elección de la estrategia B
-    "APORTE_MENSUAL":  100.0,   # USD que agregas cada fin de mes
-    # Capital real con el que se inicia la cartera. None = en pausa: el bot
-    # no crea la cartera ni envía órdenes hasta que se defina el monto.
-    "CAPITAL_INICIAL": None,
+    # Aporte fijo de fin de mes. 0 = sin aporte fijo: los depósitos se
+    # registran cuando ocurren (input "aporte" del workflow).
+    "APORTE_MENSUAL":  0.0,
+    # Capital real con el que se inicia la cartera (efectivo disponible en
+    # eToro el 14-oct-2026). None = en pausa: no crea la cartera ni envía órdenes.
+    "CAPITAL_INICIAL": 316.15,
     "ORDEN_MINIMA":    10.0,    # USD; diferencias menores no se operan (mínimo eToro)
     "COSTE_PCT":       es.COSTE_PCT_ETF,
 }
@@ -53,8 +57,8 @@ def guardar_modelo(modelo: dict, ruta: str = MODELO_FILE):
     with open(ruta, "w", encoding="utf-8") as f:
         json.dump(modelo, f, indent=2, ensure_ascii=False)
 
-def nuevo_modelo(fecha: date, spy: float, cfg: dict = CONFIG) -> dict:
-    capital = cfg["CAPITAL_INICIAL"]
+def nuevo_modelo(fecha: date, spy: float, cfg: dict = CONFIG, extra: float = 0.0) -> dict:
+    capital = cfg["CAPITAL_INICIAL"] + extra
     return {
         "estrategia": f"{int(cfg['PESO_SPY'] * 100)}% SPY + {int(round((1 - cfg['PESO_SPY']) * 100))}% B",
         "inicio": fecha.isoformat(),
@@ -66,6 +70,7 @@ def nuevo_modelo(fecha: date, spy: float, cfg: dict = CONFIG) -> dict:
         "asignacion": {},
         "ultimo_rebalanceo": None,
         "ultimo_cierre_mes": None,   # "AAAA-MM" del último aporte + rebalanceo mensual
+        "aportes": [{"fecha": fecha.isoformat(), "usd": capital}],
         "historial": [],
     }
 
@@ -175,8 +180,12 @@ def texto_ordenes(ordenes: list) -> str:
 # ======================================================================
 
 def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
-             precios_hist=None, cfg: dict = CONFIG, ruta: str = MODELO_FILE) -> str | None:
-    """Decide qué hacer hoy, actualiza el modelo y envía el mensaje. Devuelve el texto."""
+             precios_hist=None, cfg: dict = CONFIG, ruta: str = MODELO_FILE,
+             aporte: float = 0.0) -> str | None:
+    """Decide qué hacer hoy, actualiza el modelo y envía el mensaje. Devuelve el texto.
+
+    `aporte` > 0 registra un depósito hecho en eToro y envía las órdenes para invertirlo.
+    """
     if cargar_modelo(ruta) is None and not cfg.get("CAPITAL_INICIAL"):
         texto = ("CARTERA ETF (50% SPY + 50% B) - EN PAUSA\n"
                  "Esperando el capital inicial real para crear la cartera y enviar las "
@@ -194,7 +203,7 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
     modelo = cargar_modelo(ruta)
 
     if modelo is None:
-        modelo = nuevo_modelo(hoy, precios["SPY"], cfg)
+        modelo = nuevo_modelo(hoy, precios["SPY"], cfg, extra=aporte)
         ordenes = rebalancear(modelo, objetivo, precios, hoy, cfg)
         if es_ultimo_dia_habil_mes(hoy):
             # El capital inicial ya cuenta como el movimiento de este mes
@@ -203,14 +212,27 @@ def ejecutar(hoy: date, manual: bool = False, enviar=qc.enviar_telegram,
         texto = "\n".join([f"CARTERA {modelo['estrategia']} - INICIO", sep,
                            texto_senal(objetivo, puntajes), sep,
                            texto_ordenes(ordenes), sep, texto_estado(modelo, precios)])
+    elif aporte > 0:
+        aportar(modelo, aporte, precios)
+        modelo.setdefault("aportes", []).append({"fecha": hoy.isoformat(), "usd": aporte})
+        ordenes = rebalancear(modelo, objetivo, precios, hoy, cfg)
+        if es_ultimo_dia_habil_mes(hoy):
+            modelo["ultimo_cierre_mes"] = hoy.isoformat()[:7]   # ya rebalanceado hoy
+        guardar_modelo(modelo, ruta)
+        texto = "\n".join([f"APORTE REGISTRADO: {_usd(aporte)} - {modelo['estrategia']}", sep,
+                           "Ejecuta al cierre de hoy o en la apertura de manana:", "",
+                           texto_ordenes(ordenes), sep, texto_senal(objetivo, puntajes), sep,
+                           texto_estado(modelo, precios)])
     elif es_ultimo_dia_habil_mes(hoy) and modelo.get("ultimo_cierre_mes") != hoy.isoformat()[:7]:
-        aportar(modelo, cfg["APORTE_MENSUAL"], precios)
+        fijo = cfg["APORTE_MENSUAL"]
+        aportar(modelo, fijo, precios)
         ordenes = rebalancear(modelo, objetivo, precios, hoy, cfg)
         modelo["ultimo_cierre_mes"] = hoy.isoformat()[:7]
         guardar_modelo(modelo, ruta)
-        texto = "\n".join([f"REBALANCEO MENSUAL - {modelo['estrategia']}", sep,
-                           f"1. Deposita tu aporte de {_usd(cfg['APORTE_MENSUAL'])}.",
-                           "2. Ejecuta al cierre de hoy o en la apertura de manana:", "",
+        pasos = ([f"1. Deposita tu aporte de {_usd(fijo)}.",
+                  "2. Ejecuta al cierre de hoy o en la apertura de manana:"] if fijo > 0
+                 else ["Ejecuta al cierre de hoy o en la apertura de manana:"])
+        texto = "\n".join([f"REBALANCEO MENSUAL - {modelo['estrategia']}", sep, *pasos, "",
                            texto_ordenes(ordenes), sep, texto_senal(objetivo, puntajes), sep,
                            texto_estado(modelo, precios)])
     elif hoy.weekday() == 4 or manual:

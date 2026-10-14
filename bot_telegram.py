@@ -332,7 +332,12 @@ if __name__ == "__main__":
         manual = os.getenv("MODO_MANUAL", "").strip() != ""
         if modo == "CIERRE" or manual:
             hoy = datetime.now(NY).date()
-            cartera.ejecutar(hoy, manual=manual)
+            try:
+                aporte = float(os.getenv("APORTE", "").strip().replace("$", "").replace(",", "") or 0)
+            except ValueError:
+                aporte = 0.0
+                enviar_telegram("Aporte no valido: '" + os.getenv("APORTE", "") + "'. No se registro.")
+            cartera.ejecutar(hoy, manual=manual, aporte=max(aporte, 0.0))
             if os.getenv("SATELITE", "1").strip() != "0":
                 # El satelite no debe impedir el mensaje de la cartera principal
                 try:
